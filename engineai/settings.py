@@ -31,6 +31,7 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
+    'unfold',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -38,7 +39,9 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'engineai',
-
+    'aichatapp',
+    'channels',
+    'django_ai_assistant',
 ]
 
 MIDDLEWARE = [
@@ -69,6 +72,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'engineai.wsgi.application'
+ASGI_APPLICATION = 'engineai.asgi.application'
 
 
 # Database
@@ -122,3 +126,53 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Channels
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels.layers.InMemoryChannelLayer"
+    }
+}
+
+
+# mysite/settings.py
+UNFOLD = {
+    # 基础（你已有）
+    "SITE_TITLE": "EngineAI",
+    "SITE_HEADER": "管理后台",
+    
+    # 新增：启用命令面板（Ctrl+K 快速搜索模型，像 VS Code）
+    "COMMANDS_ENABLED": True,  # 2025 新特性：Web 版命令行
+    
+    # 新增：自定义仪表盘（首页变统计页）
+    "DASHBOARD_ENABLED": True,
+    "DASHBOARD_STATS": [  # 简单配置：添加卡片/图表
+        {
+            "title": "总文章数",
+            "value": lambda: Article.objects.count(),  # 动态查询
+            "icon": "pen-tool",  # Unfold 图标
+            "color": "blue",
+        },
+        {
+            "title": "最近用户",
+            "type": "list",  # 列表组件
+            "model": "auth.User",
+            "limit": 5,
+        },
+    ],
+    
+    # 新增：高级过滤全局开启
+    "ADVANCED_FILTERS": True,  # 所有 list_filter 变高级版
+    
+    # 新增：集成 Crispy Forms（更美表单）
+    "CRISPY_TEMPLATE_PACK": "unfold",  # 如果你用 django-crispy-forms
+    
+    # 新增：UI 组件（卡片、按钮重用）
+    "COMPONENTS": {
+        "cards": True,  # 仪表盘卡片
+        "charts": True,  # 需额外 JS，如 Chart.js
+    },
+    
+    # 2025 新：Studio 插件（可视化自定义，无代码改颜色/布局）
+    "STUDIO_ENABLED": True,  # pip install django-unfold-studio（可选付费）
+}
