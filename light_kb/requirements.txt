@@ -1,9 +1,0 @@
-openai
-chromadb
-sentence-transformers
-semantic-chunkers
-pymupdf
-python-docx
-tqdm
-numpy
-fitz

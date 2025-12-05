@@ -22,6 +22,5 @@ from . import views
 urlpatterns = [
     path('admin/', admin.site.urls),
     path("", views.home, name="home"),
-    path('aichat/', include('aichatapp.urls')),
-    path('kb/', include('light_kb.urls')),
+    path('aichat/', include('aichat.urls')),
 ]
