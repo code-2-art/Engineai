@@ -39,9 +39,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'engineai',
-    'aichatapp',
-    'channels',
-    'django_ai_assistant',
+    'light_kb',
 ]
 
 MIDDLEWARE = [
@@ -176,3 +174,7 @@ UNFOLD = {
     # 2025 新：Studio 插件（可视化自定义，无代码改颜色/布局）
     "STUDIO_ENABLED": True,  # pip install django-unfold-studio（可选付费）
 }
+
+# settings.py 最后加上（可选）
+import os
+os.environ.setdefault("OPENROUTER_API_KEY", "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")

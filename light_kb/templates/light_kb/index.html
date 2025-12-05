@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>轻量知识库</title>
+<style>body{font-family:Arial;margin:40px;line-height:1.6;}
+textarea{width:100%;height:100px;} #result{margin-top:20px;padding:15px;background:#f9f9f9;border-radius:8px;}</style>
+</head><body>
+<h1>轻量知识库（Qwen3-Embedding + DeepSeek）</h1>
+<p><input type="file" id="file"> <button onclick="upload()">上传文档</button></p><hr>
+<textarea id="q" placeholder="问我任何问题..."></textarea><br>
+<button onclick="ask()">提问</button>
+<div id="result"></div>
+
+<script>
+async function upload(){let f=document.getElementById("file").files[0];if(!f)return alert("选文件");
+  let fd=new FormData();fd.append("file",f);
+  let r=await fetch("/kb/upload",{method:"POST",body:fd});
+  let d=await r.json();alert("成功！"+d.chunks+"个块");}
+async function ask(){let q=document.getElementById("q").value.trim();if(!q)return;
+  let r=await fetch("/kb/ask",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({question:q})});
+  let d=await r.json();
+  document.getElementById("result").innerHTML=
+    "<h3>回答：</h3><p>"+d.answer.replace(/\n/g,"<br>")+"</p><hr><h4>来源：</h4>"+
+    d.sources.map(s=>"<p>→ "+s.slice(0,400)+"...</p>").join("");}
+</script>
+</body></html>
