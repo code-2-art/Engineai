@@ -39,8 +39,66 @@ class Application extends ConsumerWidget {
       theme: theme.toApproximateMaterialTheme(),
       builder: (_, child) => FAnimatedTheme(data: theme, child: child!),
       // You can also replace FScaffold with Material Scaffold.
-      home: const FScaffold(
-        child: AiChat(),
+      home: FScaffold(
+        sidebar: Consumer(
+          builder: (context, ref, child) {
+            final collapsed = ref.watch(sidebarCollapsedProvider);
+            if (collapsed) {
+              return const SizedBox.shrink();
+            }
+            return FSidebar(
+              header: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                      child: Text(
+                        '设置',
+                        style: FTheme.of(context).typography.sm.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    FDivider(),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '主题: ',
+                            style: FTheme.of(context).typography.sm,
+                          ),
+                          Material(
+                            color: Colors.transparent,
+                            child: DropdownButton<int>(
+                              value: ref.watch(currentThemeIndexProvider),
+                              items: themeNames.asMap().entries.map((entry) {
+                                return DropdownMenuItem<int>(
+                                  value: entry.key,
+                                  child: Text(entry.value),
+                                );
+                              }).toList(),
+                              onChanged: (int? value) {
+                                if (value != null) {
+                                  ref.read(currentThemeIndexProvider.notifier).state = value;
+                                }
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              children: [],
+            );
+          },
+        ),
+        child: const AiChat(),
       ),
     );
   }

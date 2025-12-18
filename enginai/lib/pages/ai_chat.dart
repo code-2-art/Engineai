@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:forui/forui.dart';
@@ -37,9 +38,11 @@ class AiChat extends ConsumerStatefulWidget {
 class _AiChatState extends ConsumerState<AiChat> {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  Timer? _autoCloseTimer;
 
   @override
   void dispose() {
+    _autoCloseTimer?.cancel();
     _controller.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -49,7 +52,7 @@ class _AiChatState extends ConsumerState<AiChat> {
     if (_scrollController.hasClients) {
       _scrollController.animateTo(
         _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 300),
+        duration: const Duration(milliseconds: 800),
         curve: Curves.easeOut,
       );
     }
@@ -91,118 +94,120 @@ class _AiChatState extends ConsumerState<AiChat> {
     return Material(
       child: Column(
         children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(8.0),
+          Padding(
+            padding: const EdgeInsets.all(12),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Text('主题: '),
-                DropdownButton<int>(
-                  value: ref.watch(currentThemeIndexProvider),
-                  items: themeNames.asMap().entries.map((entry) {
-                    return DropdownMenuItem<int>(
-                      value: entry.key,
-                      child: Text(entry.value),
-                    );
-                  }).toList(),
-                  onChanged: (int? value) {
-                    if (value != null) {
-                      ref.read(currentThemeIndexProvider.notifier).state = value;
+                IconButton(
+                  onPressed: () {
+                    final isCurrentlyCollapsed = ref.read(sidebarCollapsedProvider);
+                    _autoCloseTimer?.cancel();
+                    ref.read(sidebarCollapsedProvider.notifier).state = !isCurrentlyCollapsed;
+                    if (!ref.read(sidebarCollapsedProvider)) {
+                      _autoCloseTimer = Timer(const Duration(seconds: 3), () {
+                        if (mounted && !ref.read(sidebarCollapsedProvider)) {
+                          ref.read(sidebarCollapsedProvider.notifier).state = true;
+                        }
+                      });
                     }
                   },
+                  icon: const Icon(Icons.menu, size: 20),
+                  style: IconButton.styleFrom(
+                    backgroundColor: Colors.transparent,
+                  ),
                 ),
+                const Spacer(),
               ],
             ),
           ),
           Expanded(
-          child: ListView.builder(
-            controller: _scrollController,
-            itemCount: history.length + (currentResponse.isNotEmpty ? 1 : 0),
-            itemBuilder: (context, index) {
-              if (index < history.length) {
-                final message = history[index];
-                return Align(
-                  alignment: message.isUser ? Alignment.centerRight : Alignment.centerLeft,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
-                    child: Container(
-                      constraints: BoxConstraints(
-                        maxWidth: MediaQuery.of(context).size.width * 0.7,
-                      ),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: message.isUser ? Theme.of(context).colorScheme.primaryContainer : Theme.of(context).colorScheme.secondaryContainer,
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                      child: MarkdownBody(
-                        data: message.text,
-                        styleSheet: MarkdownStyleSheet(
-                          p: TextStyle(
-                            fontSize: 16,
-                            color: message.isUser ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSecondaryContainer,
+            child: ListView.builder(
+              controller: _scrollController,
+              itemCount: history.length + (currentResponse.isNotEmpty ? 1 : 0),
+              itemBuilder: (context, index) {
+                if (index < history.length) {
+                  final message = history[index];
+                  return Align(
+                    alignment: message.isUser ? Alignment.centerRight : Alignment.centerLeft,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
+                      child: Container(
+                        constraints: BoxConstraints(
+                          maxWidth: MediaQuery.of(context).size.width * 0.7,
+                        ),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: message.isUser ? Theme.of(context).colorScheme.primaryContainer : Theme.of(context).colorScheme.secondaryContainer,
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        child: MarkdownBody(
+                          data: message.text,
+                          styleSheet: MarkdownStyleSheet(
+                            p: TextStyle(
+                              fontSize: 16,
+                              color: message.isUser ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSecondaryContainer,
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                );
-              } else {
-                return Align(
-                  alignment: Alignment.centerLeft,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
-                    child: Container(
-                      constraints: BoxConstraints(
-                        maxWidth: MediaQuery.of(context).size.width * 0.7,
-                      ),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.secondaryContainer,
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                      child: MarkdownBody(
-                        data: currentResponse.isEmpty ? 'AI 正在思考...' : currentResponse,
-                        styleSheet: MarkdownStyleSheet(
-                          p: TextStyle(
-                            fontSize: 16,
-                            color: Theme.of(context).colorScheme.onSecondaryContainer,
+                  );
+                } else {
+                  return Align(
+                    alignment: Alignment.centerLeft,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
+                      child: Container(
+                        constraints: BoxConstraints(
+                          maxWidth: MediaQuery.of(context).size.width * 0.7,
+                        ),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.secondaryContainer,
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        child: MarkdownBody(
+                          data: currentResponse.isEmpty ? 'AI 正在思考...' : currentResponse,
+                          styleSheet: MarkdownStyleSheet(
+                            p: TextStyle(
+                              fontSize: 16,
+                              color: Theme.of(context).colorScheme.onSecondaryContainer,
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                );
-              }
-            },
+                  );
+                }
+              },
+            ),
           ),
-        ),
-        Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _controller,
-                  decoration: InputDecoration(
-                    hintText: '输入消息...',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(24),
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _controller,
+                    decoration: InputDecoration(
+                      hintText: '输入消息...',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                      ),
                     ),
+                    onSubmitted: (_) => _sendMessage(),
                   ),
-                  onSubmitted: (_) => _sendMessage(),
                 ),
-              ),
-              const SizedBox(width: 8),
-              FButton(
-                onPress: _sendMessage,
-                child: const Text('发送'),
-              ),
-            ],
+                const SizedBox(width: 8),
+                FButton(
+                  onPress: _sendMessage,
+                  child: const Text('发送'),
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
-    ),
-  );
+        ],
+      ),
+    );
   }
 }

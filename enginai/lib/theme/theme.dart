@@ -20,3 +20,5 @@ final List<String> themeNames = [
 ];
 
 final currentThemeIndexProvider = StateProvider<int>((ref) => 1);
+
+final sidebarCollapsedProvider = StateProvider<bool>((ref) => false);
