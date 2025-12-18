@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:forui/forui.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'pages/ai_chat.dart';
+import 'pages/settings_page.dart';
 import 'services/llm_provider.dart';
 import 'theme/theme.dart';
  
-void main() {
+void main() async {
+  await Hive.initFlutter();
+  
   runApp(
     const ProviderScope(
       child: Application(),
@@ -126,7 +130,19 @@ class Application extends ConsumerWidget {
                   ],
                 ),
               ),
-              children: [],
+              children: [
+                FSidebarItem(
+                  icon: const Icon(Icons.settings, size: 20),
+                  label: const Text('管理模型'),
+                  onPress: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => const SettingsPage(),
+                      ),
+                    );
+                  },
+                ),
+              ],
             );
           },
         ),
