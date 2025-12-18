@@ -1,8 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:forui/forui.dart';
+import 'pages/ai_chat.dart';
  
 void main() {
-  runApp(const Application());
+  runApp(
+    const ProviderScope(
+      child: Application(),
+    ),
+  );
 }
  
 class Application extends StatelessWidget {
@@ -32,37 +38,10 @@ class Application extends StatelessWidget {
       builder: (_, child) => FAnimatedTheme(data: theme, child: child!),
       // You can also replace FScaffold with Material Scaffold.
       home: const FScaffold(
-        // TODO: replace with your widget.
-        child: Example(),
+        child: AiChat(),
       ),
     );
   }
 }
  
-class Example extends StatefulWidget {
-  const Example({super.key});
- 
-  @override
-  State<Example> createState() => _ExampleState();
-}
- 
-class _ExampleState extends State<Example> {
-  int _count = 0;
- 
-  @override
-  Widget build(BuildContext context) => Center(
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      spacing: 10,
-      children: [
-        Text('Count: $_count'),
-        FButton(
-          onPress: () => setState(() => _count++),
-          suffix: const Icon(FIcons.chevronsUp),
-          child: const Text('Increase'),
-        ),
-      ],
-    ),
-  );
-}
  
