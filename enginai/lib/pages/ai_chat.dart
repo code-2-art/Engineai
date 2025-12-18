@@ -106,14 +106,14 @@ class _AiChatState extends ConsumerState<AiChat> {
                       ),
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: message.isUser ? Colors.blue[500] : Colors.grey[200],
+                        color: message.isUser ? Theme.of(context).colorScheme.primaryContainer : Theme.of(context).colorScheme.secondaryContainer,
                         borderRadius: BorderRadius.circular(18),
                       ),
                       child: Text(
                         message.text,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 16,
-                          color: Colors.white,
+                          color: message.isUser ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSecondaryContainer,
                         ),
                       ),
                     ),
@@ -130,14 +130,14 @@ class _AiChatState extends ConsumerState<AiChat> {
                       ),
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.grey[200],
+                        color: Theme.of(context).colorScheme.secondaryContainer,
                         borderRadius: BorderRadius.circular(18),
                       ),
                       child: Text(
                         currentResponse.isEmpty ? 'AI 正在思考...' : currentResponse,
                         style: TextStyle(
                           fontSize: 16,
-                          color: Colors.grey[900],
+                          color: Theme.of(context).colorScheme.onSecondaryContainer,
                         ),
                       ),
                     ),
