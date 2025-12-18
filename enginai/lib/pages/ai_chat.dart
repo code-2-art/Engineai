@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:forui/forui.dart';
+import '../theme/theme.dart';
 import '../services/llm_provider.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 
@@ -90,7 +91,31 @@ class _AiChatState extends ConsumerState<AiChat> {
     return Material(
       child: Column(
         children: [
-        Expanded(
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(8.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Text('主题: '),
+                DropdownButton<int>(
+                  value: ref.watch(currentThemeIndexProvider),
+                  items: themeNames.asMap().entries.map((entry) {
+                    return DropdownMenuItem<int>(
+                      value: entry.key,
+                      child: Text(entry.value),
+                    );
+                  }).toList(),
+                  onChanged: (int? value) {
+                    if (value != null) {
+                      ref.read(currentThemeIndexProvider.notifier).state = value;
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+          Expanded(
           child: ListView.builder(
             controller: _scrollController,
             itemCount: history.length + (currentResponse.isNotEmpty ? 1 : 0),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:forui/forui.dart';
 import 'pages/ai_chat.dart';
+import 'theme/theme.dart';
  
 void main() {
   runApp(
@@ -11,18 +12,19 @@ void main() {
   );
 }
  
-class Application extends StatelessWidget {
+class Application extends ConsumerWidget {
   const Application({super.key});
- 
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     /// Try changing this and hot reloading the application.
     ///
     /// To create a custom theme:
     /// ```shell
     /// dart forui theme create [theme template].
     /// ```
-    final theme = FThemes.zinc.dark;
+    final index = ref.watch(currentThemeIndexProvider);
+    final theme = availableThemes[index];
  
     return MaterialApp(
       // TODO: replace with your application's supported locales.
