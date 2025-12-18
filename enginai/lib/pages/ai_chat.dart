@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:forui/forui.dart';
 import '../services/llm_provider.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 
 final llmProvider = Provider<LLMProvider>((ref) => const CustomOpenAILLMProvider(
   apiKey: 'sk-989a1e9f90304b20af20f98a5815d37c',
@@ -109,11 +110,13 @@ class _AiChatState extends ConsumerState<AiChat> {
                         color: message.isUser ? Theme.of(context).colorScheme.primaryContainer : Theme.of(context).colorScheme.secondaryContainer,
                         borderRadius: BorderRadius.circular(18),
                       ),
-                      child: Text(
-                        message.text,
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: message.isUser ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSecondaryContainer,
+                      child: MarkdownBody(
+                        data: message.text,
+                        styleSheet: MarkdownStyleSheet(
+                          p: TextStyle(
+                            fontSize: 16,
+                            color: message.isUser ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSecondaryContainer,
+                          ),
                         ),
                       ),
                     ),
@@ -133,11 +136,13 @@ class _AiChatState extends ConsumerState<AiChat> {
                         color: Theme.of(context).colorScheme.secondaryContainer,
                         borderRadius: BorderRadius.circular(18),
                       ),
-                      child: Text(
-                        currentResponse.isEmpty ? 'AI 正在思考...' : currentResponse,
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Theme.of(context).colorScheme.onSecondaryContainer,
+                      child: MarkdownBody(
+                        data: currentResponse.isEmpty ? 'AI 正在思考...' : currentResponse,
+                        styleSheet: MarkdownStyleSheet(
+                          p: TextStyle(
+                            fontSize: 16,
+                            color: Theme.of(context).colorScheme.onSecondaryContainer,
+                          ),
                         ),
                       ),
                     ),
