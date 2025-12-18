@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:forui/forui.dart';
 import 'pages/ai_chat.dart';
+import 'services/llm_provider.dart';
 import 'theme/theme.dart';
  
 void main() {
@@ -91,6 +92,37 @@ class Application extends ConsumerWidget {
                         ],
                       ),
                     ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '模型: ',
+                            style: FTheme.of(context).typography.sm,
+                          ),
+                          Material(
+                            color: Colors.transparent,
+                            child: ref.watch(modelNamesProvider).when(
+                              data: (names) => DropdownButton<String>(
+                                value: ref.watch(currentModelProvider),
+                                items: names.map((name) => DropdownMenuItem<String>(
+                                  value: name,
+                                  child: Text(name),
+                                )).toList(),
+                                onChanged: (String? value) {
+                                  if (value != null) {
+                                    ref.read(currentModelProvider.notifier).state = value;
+                                  }
+                                },
+                              ),
+                              loading: () => const Text('加载中...'),
+                              error: (error, stack) => Text('错误: $error'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -103,5 +135,3 @@ class Application extends ConsumerWidget {
     );
   }
 }
- 
- 

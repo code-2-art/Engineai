@@ -6,12 +6,6 @@ import '../theme/theme.dart';
 import '../services/llm_provider.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 
-final llmProvider = Provider<LLMProvider>((ref) => const CustomOpenAILLMProvider(
-  apiKey: 'sk-989a1e9f90304b20af20f98a5815d37c',
-  baseUrl: 'https://api.deepseek.com/v1/chat/completions',
-  model: 'deepseek-chat',
-));
-
 final historyProvider = StateNotifierProvider<HistoryNotifier, List<Message>>((ref) => HistoryNotifier());
 
 final currentResponseProvider = StateProvider<String>((ref) => '');
@@ -52,7 +46,7 @@ class _AiChatState extends ConsumerState<AiChat> {
     if (_scrollController.hasClients) {
       _scrollController.animateTo(
         _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 800),
+        duration: const Duration(milliseconds: 300),
         curve: Curves.easeOut,
       );
     }
@@ -68,7 +62,8 @@ class _AiChatState extends ConsumerState<AiChat> {
 
     ref.read(currentResponseProvider.notifier).state = '';
 
-    final llm = ref.read(llmProvider);
+    final llmFuture = ref.read(llmProvider.future);
+    final llm = await llmFuture;
     final history = ref.read(historyProvider);
     final stream = llm.generateStream(history, prompt);
 
@@ -104,7 +99,7 @@ class _AiChatState extends ConsumerState<AiChat> {
                     _autoCloseTimer?.cancel();
                     ref.read(sidebarCollapsedProvider.notifier).state = !isCurrentlyCollapsed;
                     if (!ref.read(sidebarCollapsedProvider)) {
-                      _autoCloseTimer = Timer(const Duration(seconds: 3), () {
+                      _autoCloseTimer = Timer(const Duration(seconds: 8), () {
                         if (mounted && !ref.read(sidebarCollapsedProvider)) {
                           ref.read(sidebarCollapsedProvider.notifier).state = true;
                         }

@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 
 class Message {
@@ -15,6 +17,62 @@ class Message {
 abstract class LLMProvider {
   Stream<String> generateStream(List<Message> history, String prompt);
 }
+
+class LLMConfig {
+  final String name;
+  final String apiKey;
+  final String baseUrl;
+  final String model;
+
+  const LLMConfig({
+    required this.name,
+    required this.apiKey,
+    required this.baseUrl,
+    required this.model,
+  });
+
+  factory LLMConfig.fromJson(Map<String, dynamic> json) {
+    return LLMConfig(
+      name: json['name'] as String,
+      apiKey: json['apiKey'] as String,
+      baseUrl: json['baseUrl'] as String,
+      model: json['model'] as String,
+    );
+  }
+}
+
+final configProvider = FutureProvider<Map<String, LLMConfig>>((ref) async {
+  final configString = await rootBundle.loadString('assets/config/llm.json');
+  final Map<String, dynamic> data = json.decode(configString);
+  final List<dynamic> models = data['models'];
+  final Map<String, LLMConfig> configs = {};
+  for (final modelJson in models) {
+    final config = LLMConfig.fromJson(modelJson as Map<String, dynamic>);
+    configs[config.name] = config;
+  }
+  return configs;
+});
+
+final currentModelProvider = StateProvider<String>((ref) => 'deepseek-chat');
+
+final llmProvider = FutureProvider<LLMProvider>((ref) async {
+  final currentModel = ref.watch(currentModelProvider);
+  final configs = await ref.read(configProvider.future);
+  final config = configs[currentModel];
+  if (config == null) {
+    throw Exception('模型 $currentModel 未找到，请检查配置文件');
+  }
+  return CustomOpenAILLMProvider(
+    apiKey: config.apiKey,
+    baseUrl: config.baseUrl,
+    model: config.model,
+  );
+});
+
+final modelNamesProvider = FutureProvider<List<String>>((ref) async {
+  final configs = await ref.read(configProvider.future);
+  return configs.keys.toList();
+});
 
 class CustomOpenAILLMProvider implements LLMProvider {
   final String apiKey;
@@ -87,5 +145,9 @@ class CustomOpenAILLMProvider implements LLMProvider {
   }
 }
 
-// 使用示例: final llm = CustomOpenAILLMProvider();
+// 使用示例:
+// final configs = ref.read(configProvider);
+// final modelNames = ref.read(modelNamesProvider);
+// ref.read(currentModelProvider.notifier).state = 'deepseek-chat';
+// final llm = await ref.read(llmProvider.future);
 // llm.generateStream(history, prompt).listen((delta) => print(delta));
