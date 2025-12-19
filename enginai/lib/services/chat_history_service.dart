@@ -46,8 +46,9 @@ class ChatHistoryService {
     buffer.writeln();
 
     for (final message in session.messages) {
-      final role = message.isUser ? 'User' : 'AI';
-      buffer.writeln('### $role');
+      final role = message.sender ?? (message.isUser ? 'User' : 'AI');
+      final timeStr = "${message.timestamp.hour.toString().padLeft(2, '0')}:${message.timestamp.minute.toString().padLeft(2, '0')}";
+      buffer.writeln('### $role ($timeStr)');
       buffer.writeln(message.text);
       buffer.writeln();
     }

@@ -4,11 +4,13 @@ class Message {
   final bool isUser;
   final String text;
   final DateTime timestamp;
+  final String? sender;
 
   Message({
     required this.isUser,
     required this.text,
     DateTime? timestamp,
+    this.sender,
   }) : timestamp = timestamp ?? DateTime.now();
 
   factory Message.fromJson(Map<String, dynamic> json) {
@@ -16,6 +18,7 @@ class Message {
       isUser: json['isUser'] as bool,
       text: json['text'] as String,
       timestamp: DateTime.parse(json['timestamp'] as String),
+      sender: json['sender'] as String?,
     );
   }
 
@@ -24,6 +27,7 @@ class Message {
       'isUser': isUser,
       'text': text,
       'timestamp': timestamp.toIso8601String(),
+      'sender': sender,
     };
   }
 }

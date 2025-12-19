@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:forui/forui.dart';
@@ -18,11 +19,19 @@ void main() async {
   
   final prefs = await SharedPreferences.getInstance();
 
+  final container = ProviderContainer(
+    overrides: [
+      sharedPreferencesProvider.overrideWithValue(prefs),
+    ],
+  );
+  
+  // Pre-warm the configuration and LLM provider
+  unawaited(container.read(configProvider.future));
+  unawaited(container.read(llmProvider.future));
+
   runApp(
-    ProviderScope(
-      overrides: [
-        sharedPreferencesProvider.overrideWithValue(prefs),
-      ],
+    UncontrolledProviderScope(
+      container: container,
       child: const Application(),
     ),
   );
@@ -115,8 +124,9 @@ class Application extends ConsumerWidget {
                       child: FSidebarItem(
                         icon: const Icon(Icons.chat_bubble_outline, size: 20),
                         label: collapsed ? const SizedBox.shrink() : Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Expanded(
+                            Flexible(
                               child: Text(
                                 session.title,
                                 maxLines: 1,
@@ -124,10 +134,9 @@ class Application extends ConsumerWidget {
                               ),
                             ),
                             if (isSelected)
-                              IconButton(
-                                icon: const Icon(Icons.edit_outlined, size: 14),
-                                visualDensity: VisualDensity.compact,
-                                onPressed: () => _showRenameDialog(context, ref, session),
+                              Padding(
+                                padding: const EdgeInsets.only(left: 4),
+                                child: Icon(Icons.edit_outlined, size: 12, color: Theme.of(context).colorScheme.primary.withOpacity(0.5)),
                               ),
                           ],
                         ),

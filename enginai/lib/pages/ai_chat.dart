@@ -24,6 +24,7 @@ class AiChat extends ConsumerStatefulWidget {
 class _AiChatState extends ConsumerState<AiChat> {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  bool _isSending = false;
 
   @override
   void dispose() {
@@ -44,18 +45,27 @@ class _AiChatState extends ConsumerState<AiChat> {
 
   Future<void> _sendMessage() async {
     final prompt = _controller.text.trim();
-    if (prompt.isEmpty) return;
+    if (prompt.isEmpty || _isSending) return;
 
-    var sessionId = ref.read(currentSessionIdProvider);
+    print('AiChat: _sendMessage started. Prompt: $prompt');
+    // We don't lock immediately to allow retries during long provider initialization
+    // if the user clicks again. We will lock just before the stream starts.
+
+    try {
+      var sessionId = ref.read(currentSessionIdProvider);
+      print('AiChat: current sessionId: $sessionId');
     if (sessionId == null) {
+      print('AiChat: Creating new session...');
       final newSession = await ref.read(sessionListProvider.notifier).createNewSession();
       sessionId = newSession.id;
       ref.read(currentSessionIdProvider.notifier).state = sessionId;
+      print('AiChat: New session created: $sessionId');
     }
 
     final currentSession = ref.read(sessionListProvider).firstWhere((s) => s.id == sessionId);
     
-    final userMessage = Message(isUser: true, text: prompt);
+    final currentModel = ref.read(currentModelProvider);
+    final userMessage = Message(isUser: true, text: prompt, sender: '我');
     final updatedMessages = [...currentSession.messages, userMessage];
     
     String title = currentSession.title;
@@ -72,20 +82,34 @@ class _AiChatState extends ConsumerState<AiChat> {
 
     ref.read(currentResponseProvider.notifier).state = '';
 
+    print('AiChat: Fetching LLM provider...');
     final llmFuture = ref.read(llmProvider.future);
     final llm = await llmFuture;
+    print('AiChat: LLM provider ready.');
+
+    if (mounted) {
+      setState(() {
+        _isSending = true;
+      });
+    }
     
-    final stream = llm.generateStream(updatedMessages, prompt);
+    // Pass currentSession.messages (the history BEFORE the new user message) 
+    // because generateStream adds the prompt itself.
+    print('AiChat: Starting stream...');
+    final stream = llm.generateStream(currentSession.messages, prompt);
 
     await for (final delta in stream) {
+      if (delta.isEmpty) continue;
       final current = ref.read(currentResponseProvider);
       ref.read(currentResponseProvider.notifier).state = current + delta;
       _scrollToBottom();
     }
+    print('AiChat: Stream finished.');
 
     final fullResponse = ref.read(currentResponseProvider);
     if (fullResponse.isNotEmpty) {
-      final aiMessage = Message(isUser: false, text: fullResponse);
+      final currentModel = ref.read(currentModelProvider);
+      final aiMessage = Message(isUser: false, text: fullResponse, sender: currentModel);
       final sessionAfterStream = ref.read(sessionListProvider).firstWhere((s) => s.id == sessionId);
       await ref.read(sessionListProvider.notifier).updateSession(
         sessionAfterStream.copyWith(messages: [...sessionAfterStream.messages, aiMessage])
@@ -93,7 +117,22 @@ class _AiChatState extends ConsumerState<AiChat> {
       ref.read(currentResponseProvider.notifier).state = '';
       _scrollToBottom();
     }
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('发送失败: $e')),
+      );
+    }
+    // Reset state on error so user can try again
+    ref.read(currentResponseProvider.notifier).state = '';
+  } finally {
+    if (mounted) {
+      setState(() {
+        _isSending = false;
+      });
+    }
   }
+}
 
   Future<void> _exportToMarkdown() async {
     final sessionId = ref.read(currentSessionIdProvider);
@@ -117,7 +156,7 @@ class _AiChatState extends ConsumerState<AiChat> {
       if (outputFile != null) {
         final file = File(outputFile);
         await file.writeAsString(md);
-        // Using a basic feedback mechanism since ScaffoldMessenger might not be available
+        // Using a basic feedback mechanism
         if (mounted) {
           showDialog(
             context: context,
@@ -206,55 +245,89 @@ class _AiChatState extends ConsumerState<AiChat> {
                     itemBuilder: (context, index) {
                       if (index < history.length) {
                         final message = history[index];
-                        return Align(
-                          alignment: message.isUser ? Alignment.centerRight : Alignment.centerLeft,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
-                            child: Container(
-                              constraints: BoxConstraints(
-                                maxWidth: MediaQuery.of(context).size.width * 0.7,
-                              ),
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: message.isUser ? Theme.of(context).colorScheme.primaryContainer : Theme.of(context).colorScheme.secondaryContainer,
-                                borderRadius: BorderRadius.circular(18),
-                              ),
-                              child: MarkdownBody(
-                                data: message.text,
-                                styleSheet: MarkdownStyleSheet(
-                                  p: TextStyle(
-                                    fontSize: 16,
-                                    color: message.isUser ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSecondaryContainer,
+                        final timeStr = "${message.timestamp.hour.toString().padLeft(2, '0')}:${message.timestamp.minute.toString().padLeft(2, '0')}";
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                          child: Column(
+                            crossAxisAlignment: message.isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 4, left: 4, right: 4),
+                                child: Text(
+                                  "${message.sender ?? (message.isUser ? '我' : 'AI')} • $timeStr",
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                                    fontWeight: FontWeight.w500,
                                   ),
                                 ),
                               ),
-                            ),
+                              Align(
+                                alignment: message.isUser ? Alignment.centerRight : Alignment.centerLeft,
+                                child: Container(
+                                  constraints: BoxConstraints(
+                                    maxWidth: MediaQuery.of(context).size.width * 0.7,
+                                  ),
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: message.isUser ? Theme.of(context).colorScheme.primaryContainer : Theme.of(context).colorScheme.secondaryContainer,
+                                    borderRadius: BorderRadius.circular(18),
+                                  ),
+                                  child: MarkdownBody(
+                                    data: message.text,
+                                    styleSheet: MarkdownStyleSheet(
+                                      p: TextStyle(
+                                        fontSize: 16,
+                                        color: message.isUser ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSecondaryContainer,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         );
                       } else {
-                        return Align(
-                          alignment: Alignment.centerLeft,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
-                            child: Container(
-                              constraints: BoxConstraints(
-                                maxWidth: MediaQuery.of(context).size.width * 0.7,
-                              ),
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Theme.of(context).colorScheme.secondaryContainer,
-                                borderRadius: BorderRadius.circular(18),
-                              ),
-                              child: MarkdownBody(
-                                data: currentResponse.isEmpty ? 'AI 正在思考...' : currentResponse,
-                                styleSheet: MarkdownStyleSheet(
-                                  p: TextStyle(
-                                    fontSize: 16,
-                                    color: Theme.of(context).colorScheme.onSecondaryContainer,
+                        final currentModel = ref.watch(currentModelProvider);
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 4, left: 4),
+                                child: Text(
+                                  "$currentModel • 正在输入...",
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                                    fontWeight: FontWeight.w500,
                                   ),
                                 ),
                               ),
-                            ),
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: Container(
+                                  constraints: BoxConstraints(
+                                    maxWidth: MediaQuery.of(context).size.width * 0.7,
+                                  ),
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context).colorScheme.secondaryContainer,
+                                    borderRadius: BorderRadius.circular(18),
+                                  ),
+                                  child: MarkdownBody(
+                                    data: currentResponse.isEmpty ? 'AI 正在思考...' : currentResponse,
+                                    styleSheet: MarkdownStyleSheet(
+                                      p: TextStyle(
+                                        fontSize: 16,
+                                        color: Theme.of(context).colorScheme.onSecondaryContainer,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         );
                       }
@@ -268,8 +341,9 @@ class _AiChatState extends ConsumerState<AiChat> {
                 Expanded(
                   child: TextField(
                     controller: _controller,
+                    enabled: !_isSending,
                     decoration: InputDecoration(
-                      hintText: '输入消息...',
+                      hintText: _isSending ? 'AI 正在回复...' : '输入消息...',
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(24),
                       ),
@@ -279,7 +353,7 @@ class _AiChatState extends ConsumerState<AiChat> {
                 ),
                 const SizedBox(width: 8),
                 FButton(
-                  onPress: _sendMessage,
+                  onPress: _isSending ? null : _sendMessage,
                   child: const Text('发送'),
                 ),
               ],

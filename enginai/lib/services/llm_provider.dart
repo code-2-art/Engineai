@@ -47,13 +47,16 @@ class ConfigNotifier extends AsyncNotifier<Map<String, LLMConfig>> {
 
   @override
   Future<Map<String, LLMConfig>> build() async {
+    print('ConfigNotifier: build() started');
     final data = await _storage.readConfig();
-    final List<dynamic> models = data['models'];
+    print('ConfigNotifier: config data read from storage');
+    final List<dynamic> models = data['models'] ?? [];
     final Map<String, LLMConfig> configs = {};
     for (final modelJson in models) {
       final config = LLMConfig.fromJson(modelJson as Map<String, dynamic>);
       configs[config.name] = config;
     }
+    print('ConfigNotifier: ${configs.length} models parsed');
     
     // Set default model if not set (optional side effect, careful with loop)
     if (state.hasValue) {
@@ -61,18 +64,14 @@ class ConfigNotifier extends AsyncNotifier<Map<String, LLMConfig>> {
     } else {
         final defaultModel = data['defaultModel'] as String?;
         if (defaultModel != null && configs.containsKey(defaultModel)) {
-            // Defer the update to the end of the frame or use a post-frame callback if possible
-            // But since we are in build(), we shouldn't trigger side effects.
-            // A better way is to initializing the StateProvider with this value
-            // However, StateProvider is initialized separately.
-             
-            // We will workaround this by scheduling a microtask to update the provider
+            print('ConfigNotifier: Scheduling default model update: $defaultModel');
             Future.microtask(() {
                ref.read(currentModelProvider.notifier).state = defaultModel;
+               print('ConfigNotifier: Default model updated in provider');
             });
         }
     }
-    
+    print('ConfigNotifier: build() finished');
     return configs;
   }
 
@@ -127,8 +126,11 @@ final configProvider = AsyncNotifierProvider<ConfigNotifier, Map<String, LLMConf
 final currentModelProvider = StateProvider<String>((ref) => 'deepseek-chat');
 
 final llmProvider = FutureProvider<LLMProvider>((ref) async {
+  print('llmProvider: initialization started');
   final currentModel = ref.watch(currentModelProvider);
+  print('llmProvider: currentModel is $currentModel');
   final configs = await ref.watch(configProvider.future);
+  print('llmProvider: configs loaded, ${configs.length} entries');
   
   // Safety check: ensure currentModel exists in configs
   var config = configs[currentModel];
@@ -170,19 +172,32 @@ class CustomOpenAILLMProvider implements LLMProvider {
   static Stream<String> parseSSE(Stream<List<int>> byteStream) async* {
     final decoder = const Utf8Decoder();
     final splitter = const LineSplitter();
-    await for (final line in byteStream.transform(decoder).transform(splitter)) {
-      if (line.startsWith('data: ')) {
-        final dataStr = line.substring(6).trim();
-        if (dataStr.isEmpty || dataStr == '[DONE]') continue;
-        try {
-          final parsed = json.decode(dataStr);
-          final content = parsed['choices']?[0]?['delta']?['content'];
-          if (content != null) yield content as String;
-        } catch (_) {
-          // ignore parse errors
+    print('LLMProvider: Starting SSE parse...');
+    try {
+      await for (final line in byteStream.transform(decoder).transform(splitter)) {
+        if (line.isEmpty) continue;
+        if (line.startsWith('data: ')) {
+          final dataStr = line.substring(6).trim();
+          if (dataStr.isEmpty || dataStr == '[DONE]') continue;
+          try {
+            final parsed = json.decode(dataStr);
+            final content = parsed['choices']?[0]?['delta']?['content'];
+            if (content != null) yield content as String;
+          } catch (e) {
+            print('LLMProvider: SSE decode error: $e. Line: $line');
+          }
+        } else if (!line.startsWith(':')) {
+          // OpenAI spec says to ignore everything else, but logging helps debug
+          if (line.contains('"content"')) {
+            print('LLMProvider: Suspicious non-data line: $line');
+          }
         }
       }
+    } catch (e) {
+      print('LLMProvider: Byte stream error: $e');
+      rethrow;
     }
+    print('LLMProvider: SSE parse finished.');
   }
 
   String _normalizeUrl(String url) {
@@ -228,7 +243,7 @@ class CustomOpenAILLMProvider implements LLMProvider {
       ..headers['Content-Type'] = 'application/json'
       ..body = json.encode(requestBody);
 
-    final streamedResponse = await request.send();
+    final streamedResponse = await request.send().timeout(const Duration(seconds: 30));
 
     if (streamedResponse.statusCode != 200) {
       final errorBody = await streamedResponse.stream.bytesToString();
