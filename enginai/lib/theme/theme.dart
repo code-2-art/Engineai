@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:forui/forui.dart';
 
+import '../services/shared_prefs_service.dart';
+
 final List<FThemeData> availableThemes = [
   FThemes.zinc.light,
   FThemes.zinc.dark,
@@ -19,6 +21,43 @@ final List<String> themeNames = [
   'Violet Dark',
 ];
 
-final currentThemeIndexProvider = StateProvider<int>((ref) => 1);
+class ThemeNotifier extends Notifier<int> {
+  static const _key = 'theme_index';
 
-final sidebarCollapsedProvider = StateProvider<bool>((ref) => false);
+  @override
+  int build() {
+    final prefs = ref.watch(sharedPreferencesProvider);
+    return prefs.getInt(_key) ?? 1; // Default to Zinc Dark (index 1)
+  }
+
+  void set(int index) {
+    if (index >= 0 && index < availableThemes.length) {
+      state = index;
+      ref.read(sharedPreferencesProvider).setInt(_key, index);
+    }
+  }
+}
+
+final currentThemeIndexProvider = NotifierProvider<ThemeNotifier, int>(ThemeNotifier.new);
+
+class SidebarNotifier extends Notifier<bool> {
+  static const _key = 'sidebar_collapsed';
+
+  @override
+  bool build() {
+    final prefs = ref.watch(sharedPreferencesProvider);
+    return prefs.getBool(_key) ?? false;
+  }
+
+  void toggle() {
+    state = !state;
+    ref.read(sharedPreferencesProvider).setBool(_key, state);
+  }
+
+  void set(bool value) {
+    state = value;
+    ref.read(sharedPreferencesProvider).setBool(_key, state);
+  }
+}
+
+final sidebarCollapsedProvider = NotifierProvider<SidebarNotifier, bool>(SidebarNotifier.new);

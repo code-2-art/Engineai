@@ -97,11 +97,24 @@ class _AiChatState extends ConsumerState<AiChat> {
                   onPressed: () {
                     final isCurrentlyCollapsed = ref.read(sidebarCollapsedProvider);
                     _autoCloseTimer?.cancel();
-                    ref.read(sidebarCollapsedProvider.notifier).state = !isCurrentlyCollapsed;
+                    
+                    // Toggle the state (and persist it)
+                    ref.read(sidebarCollapsedProvider.notifier).toggle();
+                    
+                    // If we just opened it (collapsed is false)
+                    if (isCurrentlyCollapsed) { // Note: variable holds PREVIOUS state
+                       // If previously collapsed, now it's open.
+                       // The logic was: if (!ref.read(sidebarCollapsedProvider))...
+                       // Let's stick to the semantic:
+                       // We just toggled.
+                    }
+
+                    // Re-read to check current state
                     if (!ref.read(sidebarCollapsedProvider)) {
                       _autoCloseTimer = Timer(const Duration(seconds: 8), () {
                         if (mounted && !ref.read(sidebarCollapsedProvider)) {
-                          ref.read(sidebarCollapsedProvider.notifier).state = true;
+                           // Auto-close (persist)
+                          ref.read(sidebarCollapsedProvider.notifier).set(true);
                         }
                       });
                     }

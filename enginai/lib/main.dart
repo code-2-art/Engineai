@@ -7,12 +7,21 @@ import 'pages/settings_page.dart';
 import 'services/llm_provider.dart';
 import 'theme/theme.dart';
  
+import 'package:shared_preferences/shared_preferences.dart';
+import 'services/shared_prefs_service.dart';
+
 void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   await Hive.initFlutter();
   
+  final prefs = await SharedPreferences.getInstance();
+
   runApp(
-    const ProviderScope(
-      child: Application(),
+    ProviderScope(
+      overrides: [
+        sharedPreferencesProvider.overrideWithValue(prefs),
+      ],
+      child: const Application(),
     ),
   );
 }
@@ -88,7 +97,7 @@ class Application extends ConsumerWidget {
                               }).toList(),
                               onChanged: (int? value) {
                                 if (value != null) {
-                                  ref.read(currentThemeIndexProvider.notifier).state = value;
+                                  ref.read(currentThemeIndexProvider.notifier).set(value);
                                 }
                               },
                             ),
