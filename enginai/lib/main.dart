@@ -108,18 +108,32 @@ class Application extends ConsumerWidget {
                           Material(
                             color: Colors.transparent,
                             child: ref.watch(modelNamesProvider).when(
-                              data: (names) => DropdownButton<String>(
-                                value: ref.watch(currentModelProvider),
-                                items: names.map((name) => DropdownMenuItem<String>(
-                                  value: name,
-                                  child: Text(name),
-                                )).toList(),
-                                onChanged: (String? value) {
-                                  if (value != null) {
-                                    ref.read(currentModelProvider.notifier).state = value;
+                              data: (names) {
+                                var current = ref.watch(currentModelProvider);
+                                if (!names.contains(current)) {
+                                  if (names.isNotEmpty) {
+                                    current = names.first;
+                                    // Ensure state is updated to valid value
+                                    Future.microtask(() => 
+                                      ref.read(currentModelProvider.notifier).state = current
+                                    );
+                                  } else {
+                                    return const Text('无模型');
                                   }
-                                },
-                              ),
+                                }
+                                return DropdownButton<String>(
+                                  value: current,
+                                  items: names.map((name) => DropdownMenuItem<String>(
+                                    value: name,
+                                    child: Text(name),
+                                  )).toList(),
+                                  onChanged: (String? value) {
+                                    if (value != null) {
+                                      ref.read(configProvider.notifier).updateDefaultModel(value);
+                                    }
+                                  },
+                                );
+                              },
                               loading: () => const Text('加载中...'),
                               error: (error, stack) => Text('错误: $error'),
                             ),

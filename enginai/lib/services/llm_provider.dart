@@ -71,9 +71,15 @@ class ConfigNotifier extends AsyncNotifier<Map<String, LLMConfig>> {
     } else {
         final defaultModel = data['defaultModel'] as String?;
         if (defaultModel != null && configs.containsKey(defaultModel)) {
-            // We need to defer this update or handle it in the UI/ViewModel
-            // ref.read(currentModelProvider.notifier).state = defaultModel;
-            // Provide data for default model via a separate provider or return a wrapper object
+            // Defer the update to the end of the frame or use a post-frame callback if possible
+            // But since we are in build(), we shouldn't trigger side effects.
+            // A better way is to initializing the StateProvider with this value
+            // However, StateProvider is initialized separately.
+             
+            // We will workaround this by scheduling a microtask to update the provider
+            Future.microtask(() {
+               ref.read(currentModelProvider.notifier).state = defaultModel;
+            });
         }
     }
     
@@ -101,9 +107,6 @@ class ConfigNotifier extends AsyncNotifier<Map<String, LLMConfig>> {
   }
 
   Future<void> _save(Map<String, LLMConfig> configs) async {
-    // preserve default model from current state or provider?
-    // checking currentModelProvider is tricky inside here.
-    // For now, just save models.
     final currentModel = ref.read(currentModelProvider);
     
     final data = {
@@ -112,29 +115,47 @@ class ConfigNotifier extends AsyncNotifier<Map<String, LLMConfig>> {
     };
     await _storage.saveConfig(data);
   }
+
+  Future<void> updateDefaultModel(String newModel) async {
+    // 1. Update the UI state
+    // We access the notifier directly here. 
+    // Since we are inside ConfigNotifier, using ref is fine.
+    ref.read(currentModelProvider.notifier).state = newModel;
+
+    // 2. Save entire config to persist this change
+    final currentConfigs = state.valueOrNull ?? {};
+    await _save(currentConfigs);
+  }
 }
 
 final configProvider = AsyncNotifierProvider<ConfigNotifier, Map<String, LLMConfig>>(ConfigNotifier.new);
 
+// Use a simple StateProvider, but we might want to listen to changes 
+// and save them? 
+// For now, let's keep it simple. The ConfigNotifier will handle saving when models change.
+// When currentModel changes, we should probably save that too?
 final currentModelProvider = StateProvider<String>((ref) => 'deepseek-chat');
 
 final llmProvider = FutureProvider<LLMProvider>((ref) async {
   final currentModel = ref.watch(currentModelProvider);
   final configs = await ref.watch(configProvider.future);
-  final config = configs[currentModel];
+  
+  // Safety check: ensure currentModel exists in configs
+  var config = configs[currentModel];
+  
   if (config == null) {
-    // If current model not found, try falling back to first available or throw
     if (configs.isNotEmpty) {
-      return CustomOpenAILLMProvider(
-        apiKey: configs.values.first.apiKey,
-        baseUrl: configs.values.first.baseUrl,
-        model: configs.values.first.model,
-      );
+      // Fallback to first available model if current is invalid
+      config = configs.values.first;
+      // Ideally update the state too so UI is consistent
+      Future.microtask(() => ref.read(currentModelProvider.notifier).state = config!.name);
+    } else {
+      throw Exception('未找到任何模型配置，请检查设置');
     }
-    throw Exception('模型 $currentModel 未找到，请检查配置文件');
   }
+
   return CustomOpenAILLMProvider(
-    apiKey: config.apiKey,
+    apiKey: config!.apiKey,
     baseUrl: config.baseUrl,
     model: config.model,
   );
