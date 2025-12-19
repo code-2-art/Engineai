@@ -43,6 +43,9 @@ class ChatHistoryService {
     final buffer = StringBuffer();
     buffer.writeln('# ${session.title}');
     buffer.writeln('Created at: ${session.createdAt}');
+    if (session.systemPrompt != null && session.systemPrompt!.isNotEmpty) {
+      buffer.writeln('System Prompt: ${session.systemPrompt}');
+    }
     buffer.writeln();
 
     for (final message in session.messages) {

@@ -45,12 +45,14 @@ class Message {
 class ChatSession {
   final String id;
   final String title;
+  final String? systemPrompt;
   final List<Message> messages;
   final DateTime createdAt;
 
   ChatSession({
     required this.id,
     required this.title,
+    this.systemPrompt,
     required this.messages,
     DateTime? createdAt,
   }) : createdAt = createdAt ?? DateTime.now();
@@ -59,6 +61,7 @@ class ChatSession {
     return ChatSession(
       id: json['id'] as String,
       title: json['title'] as String,
+      systemPrompt: json['systemPrompt'] as String?,
       messages: (json['messages'] as List<dynamic>)
           .map((m) => Message.fromJson(m as Map<String, dynamic>))
           .toList(),
@@ -70,6 +73,7 @@ class ChatSession {
     return {
       'id': id,
       'title': title,
+      'systemPrompt': systemPrompt,
       'messages': messages.map((m) => m.toJson()).toList(),
       'createdAt': createdAt.toIso8601String(),
     };
@@ -78,12 +82,14 @@ class ChatSession {
   ChatSession copyWith({
     String? id,
     String? title,
+    String? systemPrompt,
     List<Message>? messages,
     DateTime? createdAt,
   }) {
     return ChatSession(
       id: id ?? this.id,
       title: title ?? this.title,
+      systemPrompt: systemPrompt ?? this.systemPrompt,
       messages: messages ?? this.messages,
       createdAt: createdAt ?? this.createdAt,
     );

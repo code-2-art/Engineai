@@ -76,6 +76,14 @@ class SessionNotifier extends StateNotifier<List<ChatSession>> {
     ];
     _service.saveSessions(state);
   }
+
+  void updateSessionSystemPrompt(String id, String? systemPrompt) {
+    state = [
+      for (final session in state)
+        if (session.id == id) session.copyWith(systemPrompt: systemPrompt) else session
+    ];
+    _service.saveSessions(state);
+  }
 }
 
 final sessionListProvider = StateNotifierProvider<SessionNotifier, List<ChatSession>>((ref) {

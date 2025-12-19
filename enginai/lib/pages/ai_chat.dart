@@ -12,6 +12,8 @@ import 'package:file_picker/file_picker.dart';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'system_prompt_manager_page.dart';
+import '../models/system_prompt.dart';
 
 final currentResponseProvider = StateProvider<String>((ref) => '');
 
@@ -104,7 +106,7 @@ class _AiChatState extends ConsumerState<AiChat> {
         : fullHistory.sublist(lastClearIndex + 1);
 
     print('AiChat: Starting stream with ${effectiveHistory.length} messages in history...');
-    final stream = llm.generateStream(effectiveHistory, prompt);
+    final stream = llm.generateStream(effectiveHistory, prompt, systemPrompt: currentSession.systemPrompt);
 
     await for (final delta in stream) {
       if (delta.isEmpty) continue;
@@ -184,6 +186,55 @@ class _AiChatState extends ConsumerState<AiChat> {
     }
   }
 
+  void _showSystemPromptDialog() {
+    final sessionId = ref.read(currentSessionIdProvider);
+    if (sessionId == null) return;
+
+    ref.read(systemPromptsProvider).whenData((prompts) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('选择系统提示词'),
+          content: SizedBox(
+            width: 300,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  title: const Text('不使用系统提示词'),
+                  onTap: () {
+                    ref.read(sessionListProvider.notifier).updateSessionSystemPrompt(sessionId, null);
+                    Navigator.pop(context);
+                  },
+                ),
+                const Divider(),
+                ...prompts.map((p) => ListTile(
+                  title: Text(p.name),
+                  subtitle: Text(p.content, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  onTap: () {
+                    ref.read(sessionListProvider.notifier).updateSessionSystemPrompt(sessionId, p.content);
+                    Navigator.pop(context);
+                  },
+                )),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (context) => const SystemPromptManagerPage()),
+                );
+              },
+              child: const Text('管理提示词'),
+            ),
+          ],
+        ),
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final sessionId = ref.watch(currentSessionIdProvider);
@@ -223,6 +274,15 @@ class _AiChatState extends ConsumerState<AiChat> {
                     onPressed: _exportToMarkdown,
                     icon: const Icon(Icons.download_rounded, size: 20),
                     tooltip: '导出为 Markdown',
+                  ),
+                  IconButton(
+                    onPressed: _showSystemPromptDialog,
+                    icon: Icon(
+                      currentSession.systemPrompt != null ? Icons.description : Icons.description_outlined,
+                      size: 20,
+                      color: currentSession.systemPrompt != null ? Theme.of(context).colorScheme.primary : null,
+                    ),
+                    tooltip: '设置系统提示词',
                   ),
                   IconButton(
                     onPressed: () {
@@ -276,7 +336,7 @@ class _AiChatState extends ConsumerState<AiChat> {
                             ),
                           );
                         }
-                        final timeStr = "${message.timestamp.hour.toString().padLeft(2, '0')}:${message.timestamp.minute.toString().padLeft(2, '0')}";
+                        final timeStr = "${message.timestamp.year}-${message.timestamp.month.toString().padLeft(2, '0')}-${message.timestamp.day.toString().padLeft(2, '0')} ${message.timestamp.hour.toString().padLeft(2, '0')}:${message.timestamp.minute.toString().padLeft(2, '0')}";
                         return Padding(
                           padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
                           child: Column(

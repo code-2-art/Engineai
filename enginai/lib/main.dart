@@ -5,6 +5,7 @@ import 'package:forui/forui.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'pages/ai_chat.dart';
 import 'pages/settings_page.dart';
+import 'pages/system_prompt_manager_page.dart';
 import 'services/llm_provider.dart';
 import 'services/session_provider.dart';
 import 'models/chat_session.dart';
@@ -146,6 +147,17 @@ class Application extends ConsumerWidget {
                       Navigator.of(context).push(
                         MaterialPageRoute(
                           builder: (context) => const SettingsPage(),
+                        ),
+                      );
+                    },
+                  ),
+                  FSidebarItem(
+                    icon: const Icon(Icons.description_outlined, size: 22),
+                    label: collapsed ? const SizedBox.shrink() : const Text('系统提示词'),
+                    onPress: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => const SystemPromptManagerPage(),
                         ),
                       );
                     },

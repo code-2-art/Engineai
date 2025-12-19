@@ -6,7 +6,7 @@ import '../models/chat_session.dart';
 import 'llm_storage_service.dart';
 
 abstract class LLMProvider {
-  Stream<String> generateStream(List<Message> history, String prompt);
+  Stream<String> generateStream(List<Message> history, String prompt, {String? systemPrompt});
 }
 
 class LLMConfig {
@@ -220,8 +220,10 @@ class CustomOpenAILLMProvider implements LLMProvider {
   }
 
   @override
-  Stream<String> generateStream(List<Message> history, String prompt) async* {
+  Stream<String> generateStream(List<Message> history, String prompt, {String? systemPrompt}) async* {
     final messages = [
+      if (systemPrompt != null && systemPrompt.isNotEmpty)
+        {'role': 'system', 'content': systemPrompt},
       ...history.map((m) => <String, dynamic>{
         'role': m.isUser ? 'user' : 'assistant',
         'content': m.text,
