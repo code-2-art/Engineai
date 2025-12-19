@@ -62,7 +62,11 @@ class Application extends ConsumerWidget {
       //
       // There is a known issue with implicitly animated widgets where their transition occurs AFTER the theme's.
       // See https://github.com/forus-labs/forui/issues/670.
-      theme: theme.toApproximateMaterialTheme(),
+      theme: theme.toApproximateMaterialTheme().copyWith(
+        textTheme: theme.toApproximateMaterialTheme().textTheme.apply(
+          fontFamilyFallback: const ['Microsoft YaHei', 'SimSun', 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans CJK SC', 'Arial Unicode MS'],
+        ),
+      ),
       builder: (_, child) => FAnimatedTheme(data: theme, child: child!),
       // You can also replace FScaffold with Material Scaffold.
       home: FScaffold(

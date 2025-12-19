@@ -374,6 +374,7 @@ class _AiChatState extends ConsumerState<AiChat> {
                                             p: TextStyle(
                                               fontSize: 16,
                                               color: message.isUser ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSecondaryContainer,
+                                              fontFamilyFallback: const ['Microsoft YaHei', 'SimSun', 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans CJK SC', 'Arial Unicode MS'],
                                             ),
                                           ),
                                         ),
@@ -456,6 +457,7 @@ class _AiChatState extends ConsumerState<AiChat> {
                                       p: TextStyle(
                                         fontSize: 16,
                                         color: Theme.of(context).colorScheme.onSecondaryContainer,
+                                        fontFamilyFallback: const ['Microsoft YaHei', 'SimSun', 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans CJK SC', 'Arial Unicode MS'],
                                       ),
                                     ),
                                   ),
