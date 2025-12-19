@@ -2,18 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
-
+import '../models/chat_session.dart';
 import 'llm_storage_service.dart';
-
-class Message {
-  final bool isUser;
-  final String text;
-
-  Message({
-    required this.isUser,
-    required this.text,
-  });
-}
 
 abstract class LLMProvider {
   Stream<String> generateStream(List<Message> history, String prompt);

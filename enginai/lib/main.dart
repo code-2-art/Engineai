@@ -5,6 +5,8 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'pages/ai_chat.dart';
 import 'pages/settings_page.dart';
 import 'services/llm_provider.dart';
+import 'services/session_provider.dart';
+import 'models/chat_session.dart';
 import 'theme/theme.dart';
  
 import 'package:shared_preferences/shared_preferences.dart';
@@ -88,27 +90,56 @@ class Application extends ConsumerWidget {
                   FSidebarItem(
                     icon: const Icon(Icons.add_circle_outline, size: 22),
                     label: collapsed ? const SizedBox.shrink() : const Text('新对话'),
-                    onPress: () {
-                      ref.read(historyProvider.notifier).clear();
+                    onPress: () async {
+                      final session = await ref.read(sessionListProvider.notifier).createNewSession();
+                      ref.read(currentSessionIdProvider.notifier).state = session.id;
                     },
                   ),
-                  FSidebarItem(
-                    icon: const Icon(Icons.forum_outlined, size: 22),
-                    label: collapsed ? const SizedBox.shrink() : const Text('当前聊天'),
-                    selected: true,
-                  ),
-                  // Placeholder for history
+                  const SizedBox(height: 8),
                   if (!collapsed) ...[
-                    const SizedBox(height:16),
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       child: Text(
-                        '设置',
-                        style: theme.typography.xs.copyWith(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6)),
+                        '历史记录',
+                        style: theme.typography.xs.copyWith(
+                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ],
-                  const Spacer(),
+                  ...ref.watch(sessionListProvider).map((session) {
+                    final isSelected = ref.watch(currentSessionIdProvider) == session.id;
+                    return GestureDetector(
+                      onSecondaryTapDown: (details) => _showSessionContextMenu(context, ref, session, details.globalPosition),
+                      child: FSidebarItem(
+                        icon: const Icon(Icons.chat_bubble_outline, size: 20),
+                        label: collapsed ? const SizedBox.shrink() : Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                session.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (isSelected)
+                              IconButton(
+                                icon: const Icon(Icons.edit_outlined, size: 14),
+                                visualDensity: VisualDensity.compact,
+                                onPressed: () => _showRenameDialog(context, ref, session),
+                              ),
+                          ],
+                        ),
+                        selected: isSelected,
+                        onPress: () {
+                          ref.read(currentSessionIdProvider.notifier).state = session.id;
+                        },
+                      ),
+                    );
+                  }),
+                  // Removed Spacer() as it causes ParentDataWidget error in FSidebar
+                  const SizedBox(height: 16),
                   FSidebarItem(
                     icon: const Icon(Icons.palette_outlined, size: 22),
                     label: collapsed ? const SizedBox.shrink() : const Text('外观设置'),
@@ -198,6 +229,75 @@ class Application extends ConsumerWidget {
           );
         },
       );
+    });
+  }
+
+  void _showRenameDialog(BuildContext context, WidgetRef ref, ChatSession session) {
+    final controller = TextEditingController(text: session.title);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('重命名会话'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            hintText: '输入新名称',
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () {
+              final newTitle = controller.text.trim();
+              if (newTitle.isNotEmpty) {
+                ref.read(sessionListProvider.notifier).updateSessionTitle(session.id, newTitle);
+              }
+              Navigator.pop(context);
+            },
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSessionContextMenu(BuildContext context, WidgetRef ref, ChatSession session, Offset position) {
+    final RenderBox overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+    showMenu(
+      context: context,
+      position: RelativeRect.fromRect(
+        position & const Size(40, 40),
+        Offset.zero & overlay.size,
+      ),
+      items: [
+        const PopupMenuItem(
+          value: 'rename',
+          child: ListTile(
+            leading: Icon(Icons.edit_outlined, size: 20),
+            title: Text('重命名'),
+          ),
+        ),
+        const PopupMenuItem(
+          value: 'delete',
+          child: ListTile(
+            leading: Icon(Icons.delete_outline, size: 20, color: Colors.red),
+            title: Text('删除', style: TextStyle(color: Colors.red)),
+          ),
+        ),
+      ],
+    ).then((value) {
+      if (value == 'rename') {
+        _showRenameDialog(context, ref, session);
+      } else if (value == 'delete') {
+        ref.read(sessionListProvider.notifier).deleteSession(session.id);
+        if (ref.read(currentSessionIdProvider) == session.id) {
+          ref.read(currentSessionIdProvider.notifier).state = null;
+        }
+      }
     });
   }
 }
