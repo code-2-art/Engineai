@@ -95,31 +95,14 @@ class _AiChatState extends ConsumerState<AiChat> {
               children: [
                 IconButton(
                   onPressed: () {
-                    final isCurrentlyCollapsed = ref.read(sidebarCollapsedProvider);
-                    _autoCloseTimer?.cancel();
-                    
-                    // Toggle the state (and persist it)
                     ref.read(sidebarCollapsedProvider.notifier).toggle();
-                    
-                    // If we just opened it (collapsed is false)
-                    if (isCurrentlyCollapsed) { // Note: variable holds PREVIOUS state
-                       // If previously collapsed, now it's open.
-                       // The logic was: if (!ref.read(sidebarCollapsedProvider))...
-                       // Let's stick to the semantic:
-                       // We just toggled.
-                    }
-
-                    // Re-read to check current state
-                    if (!ref.read(sidebarCollapsedProvider)) {
-                      _autoCloseTimer = Timer(const Duration(seconds: 8), () {
-                        if (mounted && !ref.read(sidebarCollapsedProvider)) {
-                           // Auto-close (persist)
-                          ref.read(sidebarCollapsedProvider.notifier).set(true);
-                        }
-                      });
-                    }
                   },
-                  icon: const Icon(Icons.menu, size: 20),
+                  icon: Consumer(
+                    builder: (context, ref, child) {
+                      final collapsed = ref.watch(sidebarCollapsedProvider);
+                      return Icon(collapsed ? Icons.menu : Icons.menu_open, size: 20);
+                    },
+                  ),
                   style: IconButton.styleFrom(
                     backgroundColor: Colors.transparent,
                   ),

@@ -57,120 +57,147 @@ class Application extends ConsumerWidget {
         sidebar: Consumer(
           builder: (context, ref, child) {
             final collapsed = ref.watch(sidebarCollapsedProvider);
-            if (collapsed) {
-              return const SizedBox.shrink();
-            }
-            return FSidebar(
-              header: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            final theme = FTheme.of(context);
+            
+            return AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: collapsed ? 72 : 260,
+              child: FSidebar(
+                header: Column(
                   children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                      child: Text(
-                        '设置',
-                        style: FTheme.of(context).typography.sm.copyWith(
+                    const SizedBox(height: 12),
+                    Icon(
+                      Icons.bolt_rounded,
+                      size: 32,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                    if (!collapsed) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'EngineAI',
+                        style: theme.typography.lg.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                    ),
+                    ],
+                    const SizedBox(height: 16),
                     FDivider(),
+                  ],
+                ),
+                children: [
+                  FSidebarItem(
+                    icon: const Icon(Icons.add_circle_outline, size: 22),
+                    label: collapsed ? const SizedBox.shrink() : const Text('新对话'),
+                    onPress: () {
+                      ref.read(historyProvider.notifier).clear();
+                    },
+                  ),
+                  FSidebarItem(
+                    icon: const Icon(Icons.forum_outlined, size: 22),
+                    label: collapsed ? const SizedBox.shrink() : const Text('当前聊天'),
+                    selected: true,
+                  ),
+                  // Placeholder for history
+                  if (!collapsed) ...[
+                    const SizedBox(height:16),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '主题: ',
-                            style: FTheme.of(context).typography.sm,
-                          ),
-                          Material(
-                            color: Colors.transparent,
-                            child: DropdownButton<int>(
-                              value: ref.watch(currentThemeIndexProvider),
-                              items: themeNames.asMap().entries.map((entry) {
-                                return DropdownMenuItem<int>(
-                                  value: entry.key,
-                                  child: Text(entry.value),
-                                );
-                              }).toList(),
-                              onChanged: (int? value) {
-                                if (value != null) {
-                                  ref.read(currentThemeIndexProvider.notifier).set(value);
-                                }
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '模型: ',
-                            style: FTheme.of(context).typography.sm,
-                          ),
-                          Material(
-                            color: Colors.transparent,
-                            child: ref.watch(modelNamesProvider).when(
-                              data: (names) {
-                                var current = ref.watch(currentModelProvider);
-                                if (!names.contains(current)) {
-                                  if (names.isNotEmpty) {
-                                    current = names.first;
-                                    // Ensure state is updated to valid value
-                                    Future.microtask(() => 
-                                      ref.read(currentModelProvider.notifier).state = current
-                                    );
-                                  } else {
-                                    return const Text('无模型');
-                                  }
-                                }
-                                return DropdownButton<String>(
-                                  value: current,
-                                  items: names.map((name) => DropdownMenuItem<String>(
-                                    value: name,
-                                    child: Text(name),
-                                  )).toList(),
-                                  onChanged: (String? value) {
-                                    if (value != null) {
-                                      ref.read(configProvider.notifier).updateDefaultModel(value);
-                                    }
-                                  },
-                                );
-                              },
-                              loading: () => const Text('加载中...'),
-                              error: (error, stack) => Text('错误: $error'),
-                            ),
-                          ),
-                        ],
+                      child: Text(
+                        '设置',
+                        style: theme.typography.xs.copyWith(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6)),
                       ),
                     ),
                   ],
-                ),
+                  const Spacer(),
+                  FSidebarItem(
+                    icon: const Icon(Icons.palette_outlined, size: 22),
+                    label: collapsed ? const SizedBox.shrink() : const Text('外观设置'),
+                    onPress: () => _showThemeDialog(context, ref),
+                  ),
+                  FSidebarItem(
+                    icon: const Icon(Icons.smart_toy_outlined, size: 22),
+                    label: collapsed ? const SizedBox.shrink() : const Text('切换模型'),
+                    onPress: () => _showModelDialog(context, ref),
+                  ),
+                  FSidebarItem(
+                    icon: const Icon(Icons.settings_outlined, size: 22),
+                    label: collapsed ? const SizedBox.shrink() : const Text('管理模型'),
+                    onPress: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => const SettingsPage(),
+                        ),
+                      );
+                    },
+                  ),
+                ],
               ),
-              children: [
-                FSidebarItem(
-                  icon: const Icon(Icons.settings, size: 20),
-                  label: const Text('管理模型'),
-                  onPress: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (context) => const SettingsPage(),
-                      ),
-                    );
-                  },
-                ),
-              ],
             );
           },
         ),
         child: const AiChat(),
       ),
     );
+  }
+
+  void _showThemeDialog(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('选择主题'),
+        content: SizedBox(
+          width: 300,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: themeNames.asMap().entries.map((entry) {
+              return ListTile(
+                title: Text(entry.value),
+                onTap: () {
+                  ref.read(currentThemeIndexProvider.notifier).set(entry.key);
+                  Navigator.pop(context);
+                },
+                trailing: ref.watch(currentThemeIndexProvider) == entry.key
+                    ? const Icon(Icons.check, color: Colors.green)
+                    : null,
+              );
+            }).toList(),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showModelDialog(BuildContext context, WidgetRef ref) {
+    ref.read(modelNamesProvider).whenData((names) {
+      showDialog(
+        context: context,
+        builder: (context) {
+          final current = ref.watch(currentModelProvider);
+          return AlertDialog(
+            title: const Text('切换模型'),
+            content: SizedBox(
+              width: 300,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: names.isEmpty
+                    ? [const Text('无可用模型')]
+                    : names.map((name) {
+                        return ListTile(
+                          title: Text(name),
+                          onTap: () {
+                            ref.read(configProvider.notifier).updateDefaultModel(name);
+                            Navigator.pop(context);
+                          },
+                          trailing: current == name
+                              ? const Icon(Icons.check, color: Colors.green)
+                              : null,
+                        );
+                      }).toList(),
+              ),
+            ),
+          );
+        },
+      );
+    });
   }
 }
