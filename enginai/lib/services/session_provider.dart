@@ -35,6 +35,17 @@ class SessionNotifier extends StateNotifier<List<ChatSession>> {
     await _service.saveSessions(state);
   }
 
+  Future<void> addSeparator(String id) async {
+    final index = state.indexWhere((s) => s.id == id);
+    if (index != -1) {
+      final updated = state[index].copyWith(
+        messages: [...state[index].messages, Message(isUser: false, text: '--- 上下文已清除 ---', isSystem: true)]
+      );
+      state = [...state.map((s) => s.id == id ? updated : s)];
+      await _service.saveSessions(state);
+    }
+  }
+
   Future<void> deleteSession(String id) async {
     state = state.where((s) => s.id != id).toList();
     await _service.saveSessions(state);

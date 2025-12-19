@@ -95,8 +95,15 @@ class _AiChatState extends ConsumerState<AiChat> {
     
     // Pass currentSession.messages (the history BEFORE the new user message) 
     // because generateStream adds the prompt itself.
-    print('AiChat: Starting stream...');
-    final stream = llm.generateStream(currentSession.messages, prompt);
+    // Prune history based on separators
+    final fullHistory = currentSession.messages;
+    final lastClearIndex = fullHistory.lastIndexWhere((m) => m.isSystem);
+    final effectiveHistory = lastClearIndex == -1 
+        ? fullHistory 
+        : fullHistory.sublist(lastClearIndex + 1);
+
+    print('AiChat: Starting stream with ${effectiveHistory.length} messages in history...');
+    final stream = llm.generateStream(effectiveHistory, prompt);
 
     await for (final delta in stream) {
       if (delta.isEmpty) continue;
@@ -187,8 +194,9 @@ class _AiChatState extends ConsumerState<AiChat> {
         : null;
     final history = currentSession?.messages ?? [];
 
-    return Material(
-      child: Column(
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: Column(
         children: [
           Padding(
             padding: const EdgeInsets.all(12),
@@ -245,6 +253,28 @@ class _AiChatState extends ConsumerState<AiChat> {
                     itemBuilder: (context, index) {
                       if (index < history.length) {
                         final message = history[index];
+                        if (message.isSystem) {
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+                            child: Row(
+                              children: [
+                                Expanded(child: Divider(color: Theme.of(context).colorScheme.primary.withOpacity(0.2))),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                                  child: Text(
+                                    '上下文已清除',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                                Expanded(child: Divider(color: Theme.of(context).colorScheme.primary.withOpacity(0.2))),
+                              ],
+                            ),
+                          );
+                        }
                         final timeStr = "${message.timestamp.hour.toString().padLeft(2, '0')}:${message.timestamp.minute.toString().padLeft(2, '0')}";
                         return Padding(
                           padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
@@ -344,17 +374,70 @@ class _AiChatState extends ConsumerState<AiChat> {
                     enabled: !_isSending,
                     decoration: InputDecoration(
                       hintText: _isSending ? 'AI 正在回复...' : '输入消息...',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(24),
+                      prefixIcon: sessionId != null ? Padding(
+                        padding: const EdgeInsets.only(left: 8),
+                        child: IconButton(
+                          icon: const Icon(Icons.cleaning_services_outlined, size: 14),
+                          tooltip: '清除上下文',
+                          constraints: const BoxConstraints(
+                            maxWidth: 32,
+                            maxHeight: 32,
+                          ),
+                          padding: EdgeInsets.zero,
+                          style: IconButton.styleFrom(
+                            shape: const CircleBorder(),
+                            hoverColor: Theme.of(context).colorScheme.primary.withOpacity(0.08),
+                          ),
+                          onPressed: () {
+                            ref.read(sessionListProvider.notifier).addSeparator(sessionId);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('上下文已清除'),
+                                behavior: SnackBarBehavior.floating,
+                                width: 200,
+                              ),
+                            );
+                          },
+                        ),
+                      ) : null,
+                      suffixIcon: ValueListenableBuilder<TextEditingValue>(
+                        valueListenable: _controller,
+                        builder: (context, value, child) {
+                          return value.text.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear, size: 20),
+                                  style: IconButton.styleFrom(
+                                    shape: const CircleBorder(),
+                                    hoverColor: Theme.of(context).colorScheme.primary.withOpacity(0.08),
+                                  ),
+                                  onPressed: () => _controller.clear(),
+                                )
+                              : const SizedBox.shrink();
+                        },
                       ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     ),
                     onSubmitted: (_) => _sendMessage(),
                   ),
                 ),
                 const SizedBox(width: 8),
-                FButton(
-                  onPress: _isSending ? null : _sendMessage,
-                  child: const Text('发送'),
+                IconButton(
+                  onPressed: _isSending ? null : _sendMessage,
+                  icon: Icon(
+                    Icons.send_rounded,
+                    color: _isSending 
+                        ? Theme.of(context).colorScheme.primary.withOpacity(0.5)
+                        : Theme.of(context).colorScheme.primary,
+                  ),
+                  style: IconButton.styleFrom(
+                    shape: const CircleBorder(),
+                    backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                    hoverColor: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+                    padding: const EdgeInsets.all(12),
+                  ),
                 ),
               ],
             ),
