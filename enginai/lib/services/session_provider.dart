@@ -46,6 +46,19 @@ class SessionNotifier extends StateNotifier<List<ChatSession>> {
     }
   }
 
+  Future<void> deleteMessage(String sessionId, String messageId) async {
+    final sessionIndex = state.indexWhere((s) => s.id == sessionId);
+    if (sessionIndex != -1) {
+      final updatedMessages = state[sessionIndex].messages.where((m) => m.id != messageId).toList();
+      final updatedSession = state[sessionIndex].copyWith(messages: updatedMessages);
+      state = [
+        for (final session in state)
+          if (session.id == sessionId) updatedSession else session
+      ];
+      await _service.saveSessions(state);
+    }
+  }
+
   Future<void> deleteSession(String id) async {
     state = state.where((s) => s.id != id).toList();
     await _service.saveSessions(state);

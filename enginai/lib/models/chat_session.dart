@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'package:uuid/uuid.dart';
 
 class Message {
+  final String id;
   final bool isUser;
   final String text;
   final DateTime timestamp;
@@ -8,15 +10,18 @@ class Message {
   final bool isSystem;
 
   Message({
+    String? id,
     required this.isUser,
     required this.text,
     DateTime? timestamp,
     this.sender,
     this.isSystem = false,
-  }) : timestamp = timestamp ?? DateTime.now();
+  })  : id = id ?? const Uuid().v4(),
+        timestamp = timestamp ?? DateTime.now();
 
   factory Message.fromJson(Map<String, dynamic> json) {
     return Message(
+      id: json['id'] as String? ?? const Uuid().v4(),
       isUser: json['isUser'] as bool,
       text: json['text'] as String,
       timestamp: DateTime.parse(json['timestamp'] as String),
@@ -27,6 +32,7 @@ class Message {
 
   Map<String, dynamic> toJson() {
     return {
+      'id': id,
       'isUser': isUser,
       'text': text,
       'timestamp': timestamp.toIso8601String(),

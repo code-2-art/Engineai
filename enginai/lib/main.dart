@@ -72,30 +72,10 @@ class Application extends ConsumerWidget {
             
             return AnimatedContainer(
               duration: const Duration(milliseconds: 200),
-              width: collapsed ? 72 : 260,
+              width: collapsed ? 64 : 250,
               child: FSidebar(
-                header: Column(
-                  children: [
-                    const SizedBox(height: 12),
-                    Icon(
-                      Icons.bolt_rounded,
-                      size: 32,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                    if (!collapsed) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        'EngineAI',
-                        style: theme.typography.lg.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 16),
-                    FDivider(),
-                  ],
-                ),
                 children: [
+                  const SizedBox(height: 16),
                   FSidebarItem(
                     icon: const Icon(Icons.add_circle_outline, size: 22),
                     label: collapsed ? const SizedBox.shrink() : const Text('新对话'),

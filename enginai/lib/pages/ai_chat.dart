@@ -11,6 +11,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 final currentResponseProvider = StateProvider<String>((ref) => '');
 
@@ -298,19 +299,62 @@ class _AiChatState extends ConsumerState<AiChat> {
                                   constraints: BoxConstraints(
                                     maxWidth: MediaQuery.of(context).size.width * 0.7,
                                   ),
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: message.isUser ? Theme.of(context).colorScheme.primaryContainer : Theme.of(context).colorScheme.secondaryContainer,
-                                    borderRadius: BorderRadius.circular(18),
-                                  ),
-                                  child: MarkdownBody(
-                                    data: message.text,
-                                    styleSheet: MarkdownStyleSheet(
-                                      p: TextStyle(
-                                        fontSize: 16,
-                                        color: message.isUser ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSecondaryContainer,
+                                  child: Column(
+                                    crossAxisAlignment: message.isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: message.isUser ? Theme.of(context).colorScheme.primaryContainer : Theme.of(context).colorScheme.secondaryContainer,
+                                          borderRadius: BorderRadius.circular(18),
+                                        ),
+                                        child: MarkdownBody(
+                                          data: message.text,
+                                          styleSheet: MarkdownStyleSheet(
+                                            p: TextStyle(
+                                              fontSize: 16,
+                                              color: message.isUser ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSecondaryContainer,
+                                            ),
+                                          ),
+                                        ),
                                       ),
-                                    ),
+                                      const SizedBox(height: 4),
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          IconButton(
+                                            icon: const Icon(Icons.copy_rounded, size: 14),
+                                            padding: EdgeInsets.zero,
+                                            constraints: const BoxConstraints(),
+                                            onPressed: () {
+                                              Clipboard.setData(ClipboardData(text: message.text));
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                const SnackBar(content: Text('已复制到剪贴板'), behavior: SnackBarBehavior.floating, width: 200),
+                                              );
+                                            },
+                                            tooltip: '复制',
+                                            style: IconButton.styleFrom(
+                                              foregroundColor: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          IconButton(
+                                            icon: const Icon(Icons.delete_outline_rounded, size: 14),
+                                            padding: EdgeInsets.zero,
+                                            constraints: const BoxConstraints(),
+                                            onPressed: () {
+                                              if (sessionId != null) {
+                                                ref.read(sessionListProvider.notifier).deleteMessage(sessionId, message.id);
+                                              }
+                                            },
+                                            tooltip: '删除',
+                                            style: IconButton.styleFrom(
+                                              foregroundColor: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ),
