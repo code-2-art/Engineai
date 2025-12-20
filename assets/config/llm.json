@@ -1,0 +1,20 @@
+{
+  "defaultModel": "openrouter-grok",
+  "models": [
+    {
+      "name": "deepseek-chat",
+      "apiKey": "",
+      "baseUrl": "https://api.deepseek.com/v1/chat/completions",
+      "model": "deepseek-chat",
+      "isEnabled": true,
+      "temperature": 1.1
+    },
+    {
+      "name": "openrouter-grok",
+      "apiKey": "",
+      "baseUrl": "https://openrouter.ai/api/v1/chat/completions",
+      "model": "x-ai/grok-4.1-fast",
+      "isEnabled": true
+    }
+  ]
+}

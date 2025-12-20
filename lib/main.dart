@@ -85,19 +85,19 @@ class Application extends ConsumerWidget {
               children: [
                 Row(
                   children: [
-                    // 左侧纯图标栏，固定宽度64，预留中间空间
+                    // 左侧纯图标栏，固定宽度36，紧凑精致样式
                     Container(
-                      width: 48,
+                      width: 36,
                       decoration: BoxDecoration(
                         color: materialTheme.colorScheme.surface,
                       ),
                       child: Column(
                         children: [
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 12),
                           Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 2),
+                            padding: EdgeInsets.zero,
                             child: IconButton(
-                              icon: const Icon(Icons.chat_bubble_outline, size: 20),
+                              icon: const Icon(Icons.chat_bubble_outline, size: 18),
                               onPressed: () async {
                                 final session = await ref.read(sessionListProvider.notifier).createNewSession();
                                 ref.read(currentSessionIdProvider.notifier).setSessionId(session.id);
@@ -106,9 +106,9 @@ class Application extends ConsumerWidget {
                           ),
                           const Spacer(), // 预留中间空间
                           Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 2),
+                            padding: EdgeInsets.zero,
                             child: IconButton(
-                              icon: const Icon(Icons.settings_outlined, size: 20),
+                              icon: const Icon(Icons.settings_outlined, size: 18),
                               onPressed: () {
                                 Navigator.of(context).push(
                                   MaterialPageRoute(
@@ -118,6 +118,7 @@ class Application extends ConsumerWidget {
                               },
                             ),
                           ),
+                          const SizedBox(height: 12),
                         ],
                       ),
                     ),
