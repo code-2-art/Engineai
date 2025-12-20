@@ -186,54 +186,6 @@ class _AiChatState extends ConsumerState<AiChat> {
     }
   }
 
-  void _showSystemPromptDialog() {
-    final sessionId = ref.read(currentSessionIdProvider);
-    if (sessionId == null) return;
-
-    ref.read(systemPromptsProvider).whenData((prompts) {
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('选择系统提示词'),
-          content: SizedBox(
-            width: 300,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ListTile(
-                  title: const Text('不使用系统提示词'),
-                  onTap: () {
-                    ref.read(sessionListProvider.notifier).updateSessionSystemPrompt(sessionId, null);
-                    Navigator.pop(context);
-                  },
-                ),
-                const Divider(),
-                ...prompts.map((p) => ListTile(
-                  title: Text(p.name),
-                  subtitle: Text(p.content, maxLines: 1, overflow: TextOverflow.ellipsis),
-                  onTap: () {
-                    ref.read(sessionListProvider.notifier).updateSessionSystemPrompt(sessionId, p.content);
-                    Navigator.pop(context);
-                  },
-                )),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (context) => const SystemPromptManagerPage()),
-                );
-              },
-              child: const Text('管理提示词'),
-            ),
-          ],
-        ),
-      );
-    });
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -269,30 +221,6 @@ class _AiChatState extends ConsumerState<AiChat> {
                   ),
                 ),
                 const Spacer(),
-                if (currentSession != null) ...[
-                  IconButton(
-                    onPressed: _exportToMarkdown,
-                    icon: const Icon(Icons.download_rounded, size: 20),
-                    tooltip: '导出为 Markdown',
-                  ),
-                  IconButton(
-                    onPressed: _showSystemPromptDialog,
-                    icon: Icon(
-                      currentSession.systemPrompt != null ? Icons.description : Icons.description_outlined,
-                      size: 20,
-                      color: currentSession.systemPrompt != null ? Theme.of(context).colorScheme.primary : null,
-                    ),
-                    tooltip: '设置系统提示词',
-                  ),
-                  IconButton(
-                    onPressed: () {
-                      ref.read(sessionListProvider.notifier).deleteSession(sessionId!);
-                      ref.read(currentSessionIdProvider.notifier).state = null;
-                    },
-                    icon: const Icon(Icons.delete_outline, size: 20),
-                    tooltip: '删除会话',
-                  ),
-                ],
               ],
             ),
           ),
@@ -366,7 +294,7 @@ class _AiChatState extends ConsumerState<AiChat> {
                                         padding: const EdgeInsets.all(12),
                                         decoration: BoxDecoration(
                                           color: message.isUser ? Theme.of(context).colorScheme.primaryContainer : Theme.of(context).colorScheme.secondaryContainer,
-                                          borderRadius: BorderRadius.circular(18),
+                                          borderRadius: BorderRadius.circular(6),
                                         ),
                                         child: MarkdownBody(
                                           data: message.text,
@@ -449,7 +377,7 @@ class _AiChatState extends ConsumerState<AiChat> {
                                   padding: const EdgeInsets.all(12),
                                   decoration: BoxDecoration(
                                     color: Theme.of(context).colorScheme.secondaryContainer,
-                                    borderRadius: BorderRadius.circular(18),
+                                    borderRadius: BorderRadius.circular(12),
                                   ),
                                   child: MarkdownBody(
                                     data: currentResponse.isEmpty ? 'AI 正在思考...' : currentResponse,
@@ -480,32 +408,223 @@ class _AiChatState extends ConsumerState<AiChat> {
                     enabled: !_isSending,
                     decoration: InputDecoration(
                       hintText: _isSending ? 'AI 正在回复...' : '输入消息...',
-                      prefixIcon: sessionId != null ? Padding(
+                      prefixIcon: Padding(
                         padding: const EdgeInsets.only(left: 8),
-                        child: IconButton(
-                          icon: const Icon(Icons.cleaning_services_outlined, size: 14),
-                          tooltip: '清除上下文',
-                          constraints: const BoxConstraints(
-                            maxWidth: 32,
-                            maxHeight: 32,
-                          ),
-                          padding: EdgeInsets.zero,
-                          style: IconButton.styleFrom(
-                            shape: const CircleBorder(),
-                            hoverColor: Theme.of(context).colorScheme.primary.withOpacity(0.08),
-                          ),
-                          onPressed: () {
-                            ref.read(sessionListProvider.notifier).addSeparator(sessionId);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('上下文已清除'),
-                                behavior: SnackBarBehavior.floating,
-                                width: 200,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Consumer(
+                              builder: (context, ref, child) {
+                                final sessionId = ref.watch(currentSessionIdProvider);
+                                final sessions = ref.watch(sessionListProvider);
+                                ChatSession? currentSession;
+                                if (sessionId != null) {
+                                  try {
+                                    currentSession = sessions.firstWhere((s) => s.id == sessionId);
+                                  } catch (e) {
+                                    currentSession = null;
+                                  }
+                                }
+                                final hasPrompt = currentSession?.systemPrompt != null;
+                                final currentPrompt = currentSession?.systemPrompt;
+                                final promptsAsync = ref.watch(systemPromptsProvider);
+                                return promptsAsync.when(
+                                  data: (prompts) {
+                                    return FPopoverMenu(
+                                      menuAnchor: Alignment.topCenter,
+                                      childAnchor: Alignment.bottomCenter,
+                                      menu: [
+                                        FItemGroup(
+                                          children: [
+                                            FItem(
+                                              title: Padding(
+                                                padding: const EdgeInsets.all(8.0),
+                                                child: Row(
+                                                  children: [
+                                                    Expanded(child: const Text('不使用系统提示词')),
+                                                    if (currentPrompt == null)
+                                                      const Icon(Icons.check, color: Colors.green),
+                                                  ],
+                                                ),
+                                              ),
+                                              onPress: () {
+                                                final sid = ref.read(currentSessionIdProvider);
+                                                if (sid != null) {
+                                                  ref.read(sessionListProvider.notifier).updateSessionSystemPrompt(sid, null);
+                                                }
+                                              },
+                                            ),
+                                            ...prompts.map((p) => FItem(
+                                              title: Padding(
+                                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                                child: Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Text(p.name),
+                                                    Text(
+                                                      p.content,
+                                                      maxLines: 1,
+                                                      overflow: TextOverflow.ellipsis,
+                                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                                                      ),
+                                                    ),
+                                                    if (currentPrompt == p.content)
+                                                      const Icon(Icons.check, color: Colors.green),
+                                                  ],
+                                                ),
+                                              ),
+                                              onPress: () {
+                                                final sid = ref.read(currentSessionIdProvider);
+                                                if (sid != null) {
+                                                  ref.read(sessionListProvider.notifier).updateSessionSystemPrompt(sid, p.content);
+                                                }
+                                              },
+                                            )),
+                                            FItem(
+                                              prefix: const Icon(Icons.edit),
+                                              title: const Text('管理提示词'),
+                                              onPress: () {
+                                                Navigator.of(context).push(
+                                                  MaterialPageRoute(
+                                                    builder: (context) => const SystemPromptManagerPage(),
+                                                  ),
+                                                );
+                                              },
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                      builder: (context, controller, child) => IconButton(
+                                        icon: Icon(
+                                          hasPrompt ? Icons.description : Icons.description_outlined,
+                                          size: 14,
+                                          color: hasPrompt ? Theme.of(context).colorScheme.primary : null,
+                                        ),
+                                        tooltip: '设置系统提示词',
+                                        constraints: const BoxConstraints(
+                                          maxWidth: 32,
+                                          maxHeight: 32,
+                                        ),
+                                        padding: EdgeInsets.zero,
+                                        style: IconButton.styleFrom(
+                                          shape: const CircleBorder(),
+                                          hoverColor: Theme.of(context).colorScheme.primary.withOpacity(0.08),
+                                        ),
+                                        onPressed: controller.toggle,
+                                      ),
+                                    );
+                                  },
+                                  loading: () => const SizedBox(width: 32, height: 32),
+                                  error: (err, stack) => IconButton(
+                                    icon: const Icon(Icons.error_outline, size: 14, color: Colors.red),
+                                    tooltip: '加载失败',
+                                    constraints: const BoxConstraints(maxWidth: 32, maxHeight: 32),
+                                    padding: EdgeInsets.zero,
+                                    onPressed: null,
+                                  ),
+                                );
+                              },
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton(
+                              icon: const Icon(Icons.cleaning_services_outlined, size: 14),
+                              tooltip: '清除上下文',
+                              constraints: const BoxConstraints(
+                                maxWidth: 32,
+                                maxHeight: 32,
                               ),
-                            );
-                          },
+                              padding: EdgeInsets.zero,
+                              style: IconButton.styleFrom(
+                                shape: const CircleBorder(),
+                                hoverColor: Theme.of(context).colorScheme.primary.withOpacity(0.08),
+                              ),
+                              onPressed: () async {
+                                var localSessionId = ref.read(currentSessionIdProvider);
+                                if (localSessionId == null) {
+                                  final newSession = await ref.read(sessionListProvider.notifier).createNewSession();
+                                  ref.read(currentSessionIdProvider.notifier).state = newSession.id;
+                                  localSessionId = newSession.id;
+                                }
+                                ref.read(sessionListProvider.notifier).addSeparator(localSessionId!);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('上下文已清除'),
+                                    behavior: SnackBarBehavior.floating,
+                                    width: 200,
+                                  ),
+                                );
+                              },
+                            ),
+                            const SizedBox(width: 8),
+                            Consumer(
+                              builder: (context, ref, child) {
+                                final namesAsync = ref.watch(modelNamesProvider);
+                                final currentModel = ref.watch(currentModelProvider);
+                                return namesAsync.when(
+                                  data: (names) {
+                                    if (names.isEmpty) {
+                                      return IconButton(
+                                        icon: const Icon(Icons.smart_toy_outlined, size: 14),
+                                        tooltip: '无可用模型',
+                                        constraints: const BoxConstraints(maxWidth: 32, maxHeight: 32),
+                                        padding: EdgeInsets.zero,
+                                        style: IconButton.styleFrom(
+                                          shape: const CircleBorder(),
+                                          hoverColor: Theme.of(context).colorScheme.primary.withOpacity(0.08),
+                                        ),
+                                        onPressed: null,
+                                      );
+                                    }
+                                    return FPopoverMenu(
+                                      menuAnchor: Alignment.topCenter,
+                                      childAnchor: Alignment.bottomCenter,
+                                      menu: [
+                                        FItemGroup(
+                                          children: names.map((name) => FItem(
+                                            title: Padding(
+                                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                              child: Row(
+                                                children: [
+                                                  Expanded(child: Text(name)),
+                                                  if (currentModel == name) const Icon(Icons.check, color: Colors.green),
+                                                ],
+                                              ),
+                                            ),
+                                            onPress: () {
+                                              ref.read(configProvider.notifier).updateDefaultModel(name);
+                                            },
+                                          )).toList(),
+                                        ),
+                                      ],
+                                      builder: (context, controller, child) => IconButton(
+                                        icon: const Icon(Icons.smart_toy_outlined, size: 14),
+                                        tooltip: '切换模型',
+                                        constraints: const BoxConstraints(maxWidth: 32, maxHeight: 32),
+                                        padding: EdgeInsets.zero,
+                                        style: IconButton.styleFrom(
+                                          shape: const CircleBorder(),
+                                          hoverColor: Theme.of(context).colorScheme.primary.withOpacity(0.08),
+                                        ),
+                                        onPressed: controller.toggle,
+                                      ),
+                                    );
+                                  },
+                                  loading: () => const SizedBox(width: 32, height: 32),
+                                  error: (err, stack) => IconButton(
+                                    icon: const Icon(Icons.error_outline, size: 14, color: Colors.red),
+                                    tooltip: '加载模型失败',
+                                    constraints: const BoxConstraints(maxWidth: 32, maxHeight: 32),
+                                    padding: EdgeInsets.zero,
+                                    onPressed: null,
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
                         ),
-                      ) : null,
+                      ),
                       suffixIcon: ValueListenableBuilder<TextEditingValue>(
                         valueListenable: _controller,
                         builder: (context, value, child) {

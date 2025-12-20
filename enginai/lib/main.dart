@@ -13,6 +13,11 @@ import 'theme/theme.dart';
  
 import 'package:shared_preferences/shared_preferences.dart';
 import 'services/shared_prefs_service.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:file_picker/file_picker.dart';
+import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'services/chat_history_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -138,11 +143,6 @@ class Application extends ConsumerWidget {
                     icon: const Icon(Icons.palette_outlined, size: 22),
                     label: collapsed ? const SizedBox.shrink() : const Text('外观设置'),
                     onPress: () => _showThemeDialog(context, ref),
-                  ),
-                  FSidebarItem(
-                    icon: const Icon(Icons.smart_toy_outlined, size: 22),
-                    label: collapsed ? const SizedBox.shrink() : const Text('切换模型'),
-                    onPress: () => _showModelDialog(context, ref),
                   ),
                   FSidebarItem(
                     icon: const Icon(Icons.settings_outlined, size: 22),
@@ -286,7 +286,14 @@ class Application extends ConsumerWidget {
             title: Text('重命名'),
           ),
         ),
-        const PopupMenuItem(
+        PopupMenuItem(
+          value: 'export',
+          child: ListTile(
+            leading: Icon(Icons.download_rounded, size: 20),
+            title: Text('导出 Markdown'),
+          ),
+        ),
+        PopupMenuItem(
           value: 'delete',
           child: ListTile(
             leading: Icon(Icons.delete_outline, size: 20, color: Colors.red),
@@ -297,6 +304,26 @@ class Application extends ConsumerWidget {
     ).then((value) {
       if (value == 'rename') {
         _showRenameDialog(context, ref, session);
+      } else if (value == 'export') {
+        final md = ref.read(chatHistoryServiceProvider).convertToMarkdown(session);
+        if (kIsWeb || !Platform.isMacOS) {
+          Share.share(md, subject: '${session.title}.md');
+        } else {
+          FilePicker.platform.saveFile(
+            dialogTitle: '导出 Markdown',
+            fileName: '${session.title}.md',
+            type: FileType.custom,
+            allowedExtensions: ['md'],
+          ).then((outputFile) {
+            if (outputFile != null && context.mounted) {
+              File(outputFile).writeAsString(md).then((_) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('导出成功: $outputFile')),
+                );
+              });
+            }
+          });
+        }
       } else if (value == 'delete') {
         ref.read(sessionListProvider.notifier).deleteSession(session.id);
         if (ref.read(currentSessionIdProvider) == session.id) {
