@@ -310,6 +310,19 @@ class _AiChatState extends ConsumerState<AiChat> {
                                               color: message.isUser ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSecondaryContainer,
                                               fontFamilyFallback: const ['Microsoft YaHei', 'SimSun', 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans CJK SC', 'Arial Unicode MS'],
                                             ),
+                                            blockquote: TextStyle(
+                                              color: message.isUser ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSecondaryContainer,
+                                              fontStyle: FontStyle.italic,
+                                            ),
+                                            blockquoteDecoration: BoxDecoration(
+                                              color: (message.isUser ? Theme.of(context).colorScheme.primaryContainer : Theme.of(context).colorScheme.secondaryContainer).withOpacity(0.3),
+                                              border: Border(
+                                                left: BorderSide(
+                                                  color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
+                                                  width: 4,
+                                                ),
+                                              ),
+                                            ),
                                           ),
                                         ),
                                       ),
@@ -392,6 +405,19 @@ class _AiChatState extends ConsumerState<AiChat> {
                                         fontSize: 16,
                                         color: Theme.of(context).colorScheme.onSecondaryContainer,
                                         fontFamilyFallback: const ['Microsoft YaHei', 'SimSun', 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans CJK SC', 'Arial Unicode MS'],
+                                      ),
+                                      blockquote: TextStyle(
+                                        color: Theme.of(context).colorScheme.onSecondaryContainer,
+                                        fontStyle: FontStyle.italic,
+                                      ),
+                                      blockquoteDecoration: BoxDecoration(
+                                        color: Theme.of(context).colorScheme.secondaryContainer.withOpacity(0.3),
+                                        border: Border(
+                                          left: BorderSide(
+                                            color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
+                                            width: 4,
+                                          ),
+                                        ),
                                       ),
                                     ),
                                   ),
