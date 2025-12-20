@@ -39,3 +39,8 @@ Data will now persist in your browser's local storage.
    ```
 
 
+## windows
+   ```bash
+   flutter run -d windows
+   flutter run -d windows --release
+   ```
