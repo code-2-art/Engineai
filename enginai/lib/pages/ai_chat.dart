@@ -443,14 +443,15 @@ class _AiChatState extends ConsumerState<AiChat> {
                                         FItemGroup(
                                           children: [
                                             FItem(title: const Text('不使用系统提示词'), suffix: currentPrompt == null ? Icon(Icons.check, size: 16, color: Theme.of(context).colorScheme.primary) : null, onPress: () async {
-                                                var sid = ref.read(currentSessionIdProvider);
-                                                if (sid == null) {
-                                                  final session = await ref.read(sessionListProvider.notifier).createNewSession();
-                                                  sid = session.id;
-                                                  ref.read(currentSessionIdProvider.notifier).setSessionId(sid);
-                                                }
-                                                ref.read(sessionListProvider.notifier).updateSessionSystemPrompt(sid, null);
-                                              },
+                                              var sid = ref.read(currentSessionIdProvider);
+                                              if (sid == null) {
+                                                final session = await ref.read(sessionListProvider.notifier).createNewSession();
+                                                sid = session.id;
+                                                ref.read(currentSessionIdProvider.notifier).setSessionId(sid);
+                                              }
+                                              ref.read(sessionListProvider.notifier).updateSessionSystemPrompt(sid, null);
+                                              ref.invalidate(enabledSystemPromptsProvider);
+                                            },
                                             ),
                                             ...prompts.map((p) => FItem(
                                               title: Text(p.name), subtitle: Text(p.content, maxLines: 1, overflow: TextOverflow.ellipsis), suffix: currentPrompt == p.content ? Icon(Icons.check, size: 16, color: Theme.of(context).colorScheme.primary) : null, onPress: () async {
@@ -461,6 +462,7 @@ class _AiChatState extends ConsumerState<AiChat> {
                                                   ref.read(currentSessionIdProvider.notifier).setSessionId(sid);
                                                 }
                                                 ref.read(sessionListProvider.notifier).updateSessionSystemPrompt(sid, p.content);
+                                                ref.invalidate(enabledSystemPromptsProvider);
                                               },
                                             )),
                                             FItem(
@@ -479,12 +481,13 @@ class _AiChatState extends ConsumerState<AiChat> {
                                         ),
                                       ],
                                       builder: (context, controller, child) => IconButton(
+                                        key: ValueKey(hasPrompt),
                                         icon: Icon(
                                           hasPrompt ? Icons.description : Icons.description_outlined,
                                           size: 14,
-                                          color: hasPrompt ? Theme.of(context).colorScheme.primary : null,
+                                          color: hasPrompt ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurface.withOpacity(0.38),
                                         ),
-                                        tooltip: '设置系统提示词',
+                                        tooltip: hasPrompt ? '当前使用系统提示词' : '不使用系统提示词',
                                         constraints: const BoxConstraints(
                                           maxWidth: 32,
                                           maxHeight: 32,
