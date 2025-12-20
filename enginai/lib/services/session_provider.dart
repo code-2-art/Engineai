@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../models/chat_session.dart';
 import 'chat_history_service.dart';
+import 'shared_prefs_service.dart';
 
 final chatHistoryServiceProvider = Provider((ref) => ChatHistoryService());
 
@@ -90,7 +91,26 @@ final sessionListProvider = StateNotifierProvider<SessionNotifier, List<ChatSess
   return SessionNotifier(ref.watch(chatHistoryServiceProvider));
 });
 
-final currentSessionIdProvider = StateProvider<String?>((ref) => null);
+class CurrentSessionNotifier extends StateNotifier<String?> {
+  final SharedPrefsService _prefsService;
+
+  CurrentSessionNotifier(this._prefsService) : super(null) {
+    _loadCurrentSessionId();
+  }
+
+  void _loadCurrentSessionId() {
+    state = _prefsService.getCurrentSessionId();
+  }
+
+  Future<void> setSessionId(String? sessionId) async {
+    state = sessionId;
+    await _prefsService.saveCurrentSessionId(sessionId);
+  }
+}
+
+final currentSessionIdProvider = StateNotifierProvider<CurrentSessionNotifier, String?>((ref) {
+  return CurrentSessionNotifier(ref.watch(sharedPrefsServiceProvider));
+});
 
 final currentSessionProvider = Provider<ChatSession?>((ref) {
   final id = ref.watch(currentSessionIdProvider);

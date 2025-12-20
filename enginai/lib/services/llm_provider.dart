@@ -14,12 +14,14 @@ class LLMConfig {
   final String apiKey;
   final String baseUrl;
   final String model;
+  final bool isEnabled;
 
   const LLMConfig({
     required this.name,
     required this.apiKey,
     required this.baseUrl,
     required this.model,
+    this.isEnabled = true,
   });
 
   factory LLMConfig.fromJson(Map<String, dynamic> json) {
@@ -28,6 +30,7 @@ class LLMConfig {
       apiKey: json['apiKey'] as String,
       baseUrl: json['baseUrl'] as String,
       model: json['model'] as String,
+      isEnabled: json['isEnabled'] as bool? ?? true,
     );
   }
 
@@ -37,7 +40,24 @@ class LLMConfig {
       'apiKey': apiKey,
       'baseUrl': baseUrl,
       'model': model,
+      'isEnabled': isEnabled,
     };
+  }
+
+  LLMConfig copyWith({
+    String? name,
+    String? apiKey,
+    String? baseUrl,
+    String? model,
+    bool? isEnabled,
+  }) {
+    return LLMConfig(
+      name: name ?? this.name,
+      apiKey: apiKey ?? this.apiKey,
+      baseUrl: baseUrl ?? this.baseUrl,
+      model: model ?? this.model,
+      isEnabled: isEnabled ?? this.isEnabled,
+    );
   }
 }
 
@@ -115,6 +135,18 @@ class ConfigNotifier extends AsyncNotifier<Map<String, LLMConfig>> {
     final currentConfigs = state.valueOrNull ?? {};
     await _save(currentConfigs);
   }
+
+  Future<void> toggleModel(String name) async {
+    final current = state.valueOrNull ?? {};
+    if (!current.containsKey(name)) return;
+    
+    final newConfigs = Map<String, LLMConfig>.from(current);
+    final config = newConfigs[name]!;
+    newConfigs[name] = config.copyWith(isEnabled: !config.isEnabled);
+    
+    state = AsyncValue.data(newConfigs);
+    await _save(newConfigs);
+  }
 }
 
 final configProvider = AsyncNotifierProvider<ConfigNotifier, Map<String, LLMConfig>>(ConfigNotifier.new);
@@ -155,7 +187,7 @@ final llmProvider = FutureProvider<LLMProvider>((ref) async {
 
 final modelNamesProvider = FutureProvider<List<String>>((ref) async {
   final configs = await ref.watch(configProvider.future);
-  return configs.keys.toList();
+  return configs.values.where((c) => c.isEnabled).map((c) => c.name).toList();
 });
 
 class CustomOpenAILLMProvider implements LLMProvider {

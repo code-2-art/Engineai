@@ -49,4 +49,13 @@ class SystemPromptService {
     prompts.removeWhere((p) => p.id == id);
     await savePrompts(prompts);
   }
+
+  Future<void> togglePrompt(String id) async {
+    final prompts = await getAllPrompts();
+    final index = prompts.indexWhere((p) => p.id == id);
+    if (index != -1) {
+      prompts[index] = prompts[index].copyWith(isEnabled: !prompts[index].isEnabled);
+      await savePrompts(prompts);
+    }
+  }
 }

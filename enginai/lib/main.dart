@@ -5,7 +5,6 @@ import 'package:forui/forui.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'pages/ai_chat.dart';
 import 'pages/settings_page.dart';
-import 'pages/system_prompt_manager_page.dart';
 import 'services/llm_provider.dart';
 import 'services/session_provider.dart';
 import 'models/chat_session.dart';
@@ -91,7 +90,7 @@ class Application extends ConsumerWidget {
                     label: collapsed ? const SizedBox.shrink() : const Text('新对话'),
                     onPress: () async {
                       final session = await ref.read(sessionListProvider.notifier).createNewSession();
-                      ref.read(currentSessionIdProvider.notifier).state = session.id;
+                      ref.read(currentSessionIdProvider.notifier).setSessionId(session.id);
                     },
                   ),
                   const SizedBox(height: 8),
@@ -132,41 +131,25 @@ class Application extends ConsumerWidget {
                         ),
                         selected: isSelected,
                         onPress: () {
-                          ref.read(currentSessionIdProvider.notifier).state = session.id;
+                          ref.read(currentSessionIdProvider.notifier).setSessionId(session.id);
                         },
                       ),
                     );
                   }),
                   // Removed Spacer() as it causes ParentDataWidget error in FSidebar
                   const SizedBox(height: 16),
-                  FSidebarItem(
-                    icon: const Icon(Icons.palette_outlined, size: 22),
-                    label: collapsed ? const SizedBox.shrink() : const Text('外观设置'),
-                    onPress: () => _showThemeDialog(context, ref),
-                  ),
-                  FSidebarItem(
-                    icon: const Icon(Icons.settings_outlined, size: 22),
-                    label: collapsed ? const SizedBox.shrink() : const Text('管理模型'),
-                    onPress: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) => const SettingsPage(),
-                        ),
-                      );
-                    },
-                  ),
-                  FSidebarItem(
-                    icon: const Icon(Icons.description_outlined, size: 22),
-                    label: collapsed ? const SizedBox.shrink() : const Text('系统提示词'),
-                    onPress: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) => const SystemPromptManagerPage(),
-                        ),
-                      );
-                    },
-                  ),
                 ],
+                footer: FSidebarItem(
+                  icon: const Icon(Icons.settings_outlined, size: 22),
+                  label: collapsed ? const SizedBox.shrink() : const Text('设置'),
+                  onPress: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => const SettingsPage(),
+                      ),
+                    );
+                  },
+                ),
               ),
             );
           },
@@ -174,67 +157,6 @@ class Application extends ConsumerWidget {
         child: const AiChat(),
       ),
     );
-  }
-
-  void _showThemeDialog(BuildContext context, WidgetRef ref) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('选择主题'),
-        content: SizedBox(
-          width: 300,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: themeNames.asMap().entries.map((entry) {
-              return ListTile(
-                title: Text(entry.value),
-                onTap: () {
-                  ref.read(currentThemeIndexProvider.notifier).set(entry.key);
-                  Navigator.pop(context);
-                },
-                trailing: ref.watch(currentThemeIndexProvider) == entry.key
-                    ? const Icon(Icons.check, color: Colors.green)
-                    : null,
-              );
-            }).toList(),
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showModelDialog(BuildContext context, WidgetRef ref) {
-    ref.read(modelNamesProvider).whenData((names) {
-      showDialog(
-        context: context,
-        builder: (context) {
-          final current = ref.watch(currentModelProvider);
-          return AlertDialog(
-            title: const Text('切换模型'),
-            content: SizedBox(
-              width: 300,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: names.isEmpty
-                    ? [const Text('无可用模型')]
-                    : names.map((name) {
-                        return ListTile(
-                          title: Text(name),
-                          onTap: () {
-                            ref.read(configProvider.notifier).updateDefaultModel(name);
-                            Navigator.pop(context);
-                          },
-                          trailing: current == name
-                              ? const Icon(Icons.check, color: Colors.green)
-                              : null,
-                        );
-                      }).toList(),
-              ),
-            ),
-          );
-        },
-      );
-    });
   }
 
   void _showRenameDialog(BuildContext context, WidgetRef ref, ChatSession session) {
@@ -327,7 +249,7 @@ class Application extends ConsumerWidget {
       } else if (value == 'delete') {
         ref.read(sessionListProvider.notifier).deleteSession(session.id);
         if (ref.read(currentSessionIdProvider) == session.id) {
-          ref.read(currentSessionIdProvider.notifier).state = null;
+          ref.read(currentSessionIdProvider.notifier).setSessionId(null);
         }
       }
     });

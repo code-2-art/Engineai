@@ -12,7 +12,7 @@ import 'package:file_picker/file_picker.dart';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'system_prompt_manager_page.dart';
+import 'settings_page.dart';
 import '../models/system_prompt.dart';
 
 final currentResponseProvider = StateProvider<String>((ref) => '');
@@ -61,7 +61,7 @@ class _AiChatState extends ConsumerState<AiChat> {
       print('AiChat: Creating new session...');
       final newSession = await ref.read(sessionListProvider.notifier).createNewSession();
       sessionId = newSession.id;
-      ref.read(currentSessionIdProvider.notifier).state = sessionId;
+      ref.read(currentSessionIdProvider.notifier).setSessionId(sessionId);
       print('AiChat: New session created: $sessionId');
     }
 
@@ -203,7 +203,7 @@ class _AiChatState extends ConsumerState<AiChat> {
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(12),
+            padding: EdgeInsets.all(12),
             child: Row(
               children: [
                 IconButton(
@@ -291,7 +291,7 @@ class _AiChatState extends ConsumerState<AiChat> {
                                     crossAxisAlignment: message.isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                                     children: [
                                       Container(
-                                        padding: const EdgeInsets.all(12),
+                                        padding: EdgeInsets.all(12),
                                         decoration: BoxDecoration(
                                           color: message.isUser ? Theme.of(context).colorScheme.primaryContainer : Theme.of(context).colorScheme.secondaryContainer,
                                           borderRadius: BorderRadius.circular(6),
@@ -374,7 +374,7 @@ class _AiChatState extends ConsumerState<AiChat> {
                                   constraints: BoxConstraints(
                                     maxWidth: MediaQuery.of(context).size.width * 0.7,
                                   ),
-                                  padding: const EdgeInsets.all(12),
+                                  padding: EdgeInsets.all(12),
                                   decoration: BoxDecoration(
                                     color: Theme.of(context).colorScheme.secondaryContainer,
                                     borderRadius: BorderRadius.circular(12),
@@ -399,7 +399,7 @@ class _AiChatState extends ConsumerState<AiChat> {
                   ),
           ),
           Padding(
-            padding: const EdgeInsets.all(12),
+            padding: EdgeInsets.all(12),
             child: Row(
               children: [
                 Expanded(
@@ -427,7 +427,7 @@ class _AiChatState extends ConsumerState<AiChat> {
                                 }
                                 final hasPrompt = currentSession?.systemPrompt != null;
                                 final currentPrompt = currentSession?.systemPrompt;
-                                final promptsAsync = ref.watch(systemPromptsProvider);
+                                final promptsAsync = ref.watch(enabledSystemPromptsProvider);
                                 return promptsAsync.when(
                                   data: (prompts) {
                                     return FPopoverMenu(
@@ -436,59 +436,35 @@ class _AiChatState extends ConsumerState<AiChat> {
                                       menu: [
                                         FItemGroup(
                                           children: [
-                                            FItem(
-                                              title: Padding(
-                                                padding: const EdgeInsets.all(8.0),
-                                                child: Row(
-                                                  children: [
-                                                    Expanded(child: const Text('不使用系统提示词')),
-                                                    if (currentPrompt == null)
-                                                      const Icon(Icons.check, color: Colors.green),
-                                                  ],
-                                                ),
-                                              ),
-                                              onPress: () {
-                                                final sid = ref.read(currentSessionIdProvider);
-                                                if (sid != null) {
-                                                  ref.read(sessionListProvider.notifier).updateSessionSystemPrompt(sid, null);
+                                            FItem(title: const Text('不使用系统提示词'), suffix: currentPrompt == null ? Icon(Icons.check, size: 16, color: Theme.of(context).colorScheme.primary) : null, onPress: () async {
+                                                var sid = ref.read(currentSessionIdProvider);
+                                                if (sid == null) {
+                                                  final session = await ref.read(sessionListProvider.notifier).createNewSession();
+                                                  sid = session.id;
+                                                  ref.read(currentSessionIdProvider.notifier).setSessionId(sid);
                                                 }
+                                                ref.read(sessionListProvider.notifier).updateSessionSystemPrompt(sid, null);
                                               },
                                             ),
                                             ...prompts.map((p) => FItem(
-                                              title: Padding(
-                                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                                child: Column(
-                                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                                  mainAxisSize: MainAxisSize.min,
-                                                  children: [
-                                                    Text(p.name),
-                                                    Text(
-                                                      p.content,
-                                                      maxLines: 1,
-                                                      overflow: TextOverflow.ellipsis,
-                                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-                                                      ),
-                                                    ),
-                                                    if (currentPrompt == p.content)
-                                                      const Icon(Icons.check, color: Colors.green),
-                                                  ],
-                                                ),
-                                              ),
-                                              onPress: () {
-                                                final sid = ref.read(currentSessionIdProvider);
-                                                if (sid != null) {
-                                                  ref.read(sessionListProvider.notifier).updateSessionSystemPrompt(sid, p.content);
+                                              title: Text(p.name), subtitle: Text(p.content, maxLines: 1, overflow: TextOverflow.ellipsis), suffix: currentPrompt == p.content ? Icon(Icons.check, size: 16, color: Theme.of(context).colorScheme.primary) : null, onPress: () async {
+                                                var sid = ref.read(currentSessionIdProvider);
+                                                if (sid == null) {
+                                                  final session = await ref.read(sessionListProvider.notifier).createNewSession();
+                                                  sid = session.id;
+                                                  ref.read(currentSessionIdProvider.notifier).setSessionId(sid);
                                                 }
+                                                ref.read(sessionListProvider.notifier).updateSessionSystemPrompt(sid, p.content);
                                               },
                                             )),
                                             FItem(
                                               prefix: const Icon(Icons.edit),
                                               title: const Text('管理提示词'),
                                               onPress: () {
+                                                ref.read(selectedSectionProvider.notifier).state = SettingsSection.prompts;
                                                 Navigator.of(context).push(
                                                   MaterialPageRoute(
-                                                    builder: (context) => const SystemPromptManagerPage(),
+                                                    builder: (context) => const SettingsPage(),
                                                   ),
                                                 );
                                               },
@@ -544,7 +520,7 @@ class _AiChatState extends ConsumerState<AiChat> {
                                 var localSessionId = ref.read(currentSessionIdProvider);
                                 if (localSessionId == null) {
                                   final newSession = await ref.read(sessionListProvider.notifier).createNewSession();
-                                  ref.read(currentSessionIdProvider.notifier).state = newSession.id;
+                                  ref.read(currentSessionIdProvider.notifier).setSessionId(newSession.id);
                                   localSessionId = newSession.id;
                                 }
                                 ref.read(sessionListProvider.notifier).addSeparator(localSessionId!);
@@ -582,17 +558,7 @@ class _AiChatState extends ConsumerState<AiChat> {
                                       childAnchor: Alignment.bottomCenter,
                                       menu: [
                                         FItemGroup(
-                                          children: names.map((name) => FItem(
-                                            title: Padding(
-                                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                              child: Row(
-                                                children: [
-                                                  Expanded(child: Text(name)),
-                                                  if (currentModel == name) const Icon(Icons.check, color: Colors.green),
-                                                ],
-                                              ),
-                                            ),
-                                            onPress: () {
+                                          children: names.map((name) => FItem(title: Text(name), suffix: currentModel == name ? Icon(Icons.check, size: 16, color: Theme.of(context).colorScheme.primary) : null, onPress: () {
                                               ref.read(configProvider.notifier).updateDefaultModel(name);
                                             },
                                           )).toList(),
@@ -661,7 +627,7 @@ class _AiChatState extends ConsumerState<AiChat> {
                     shape: const CircleBorder(),
                     backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
                     hoverColor: Theme.of(context).colorScheme.primary.withOpacity(0.2),
-                    padding: const EdgeInsets.all(12),
+                    padding: EdgeInsets.all(12),
                   ),
                 ),
               ],

@@ -1,62 +1,173 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:forui/forui.dart';
+import '../theme/theme.dart';
+import '../models/system_prompt.dart';
+import '../services/system_prompt_service.dart';
 import '../services/llm_provider.dart';
+
+final systemPromptServiceProvider = Provider((ref) => SystemPromptService());
+
+final systemPromptsProvider = FutureProvider<List<SystemPrompt>>((ref) async {
+  return await ref.watch(systemPromptServiceProvider).getAllPrompts();
+});
+
+final enabledSystemPromptsProvider = FutureProvider<List<SystemPrompt>>((ref) async {
+  final prompts = await ref.watch(systemPromptsProvider.future);
+  return prompts.where((p) => p.isEnabled).toList();
+});
+
+enum SettingsSection {
+  general('通用', Icons.tune),
+  models('模型设置', Icons.model_training),
+  prompts('系统提示词', Icons.description_outlined);
+
+  final String label;
+  final IconData icon;
+  const SettingsSection(this.label, this.icon);
+}
+
+final selectedSectionProvider = StateProvider<SettingsSection>((ref) => SettingsSection.general);
 
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return DefaultTabController(
-      length: 2,
-      child: FScaffold(
-        header: FHeader.nested(
-          title: const Text('设置'),
-          prefixes: [
-            FButton.icon(
-              onPress: () => Navigator.of(context).pop(),
-              child: const Icon(Icons.chevron_left, size: 20),
-            ),
-          ],
-        ),
-        child: Material(
-          type: MaterialType.transparency,
-          child: Column(
-            children: [
-               const TabBar(
-                tabs: [
-                  Tab(text: '通用'),
-                  Tab(text: '模型设置'),
-                ],
-                labelColor: Colors.black, // Adjust for theme if needed
-                unselectedLabelColor: Colors.grey,
-              ),
-              Expanded(
-                child: TabBarView(
-                  children: [
-                    const GeneralSettings(),
-                    const LLMSettings(),
-                  ],
+    final selectedSection = ref.watch(selectedSectionProvider);
+    final theme = FTheme.of(context);
+
+    return FScaffold(
+      header: FHeader.nested(
+        title: const Text('设置'),
+        prefixes: [
+          FButton.icon(
+            onPress: () => Navigator.of(context).pop(),
+            child: const Icon(Icons.chevron_left, size: 20),
+          ),
+        ],
+      ),
+      child: Material(
+        type: MaterialType.transparency,
+        child: Row(
+          children: [
+            // Left Sidebar
+            Container(
+              width: 200,
+              decoration: BoxDecoration(
+                border: Border(
+                  right: BorderSide(
+                    color: Theme.of(context).colorScheme.outlineVariant,
+                    width: 0.5,
+                  ),
                 ),
               ),
-            ],
-          ),
+              child: ListView(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                children: SettingsSection.values.map((section) {
+                  final isSelected = selectedSection == section;
+                  return ListTile(
+                    leading: Icon(
+                      section.icon,
+                      size: 20,
+                      color: isSelected ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurface,
+                    ),
+                    title: Text(
+                      section.label,
+                      style: theme.typography.sm.copyWith(
+                        color: isSelected ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurface,
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    ),
+                    selected: isSelected,
+                    onTap: () => ref.read(selectedSectionProvider.notifier).state = section,
+                  );
+                }).toList(),
+              ),
+            ),
+            // Right Content
+            Expanded(
+              child: _buildSectionContent(selectedSection),
+            ),
+          ],
         ),
       ),
     );
   }
+
+  Widget _buildSectionContent(SettingsSection section) {
+    switch (section) {
+      case SettingsSection.general:
+        return const GeneralSettings();
+      case SettingsSection.models:
+        return const LLMSettings();
+      case SettingsSection.prompts:
+        return const SystemPromptSettings();
+    }
+  }
 }
 
-class GeneralSettings extends StatelessWidget {
+class GeneralSettings extends ConsumerWidget {
   const GeneralSettings({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Text(
-        '通用设置 (暂无)',
-        style: FTheme.of(context).typography.base,
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currentIndex = ref.watch(currentThemeIndexProvider);
+    final theme = FTheme.of(context);
+
+    return Padding(
+      padding: const EdgeInsets.all(24.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('通用设置', style: theme.typography.xl.copyWith(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 24),
+          FCard(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('外观设置', style: theme.typography.lg.copyWith(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Text('选择主题', style: theme.typography.base),
+                      const SizedBox(width: 16),
+                      FPopoverMenu(
+                        menuAnchor: Alignment.topCenter,
+                        childAnchor: Alignment.bottomCenter,
+                        menu: [
+                          FItemGroup(
+                            children: themeNames.asMap().entries.map((entry) {
+                              return FItem(
+                                title: Text(entry.value),
+                                suffix: currentIndex == entry.key ? Icon(Icons.check, size: 16, color: Theme.of(context).colorScheme.primary) : null, onPress: () {
+                                  ref.read(currentThemeIndexProvider.notifier).set(entry.key);
+                                },
+                              );
+                            }).toList(),
+                          ),
+                        ],
+                        builder: (context, controller, child) => FButton(
+                          onPress: controller.toggle,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(themeNames[currentIndex]),
+                              const SizedBox(width: 8),
+                              const Icon(Icons.arrow_drop_down, size: 20),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -93,34 +204,40 @@ class LLMSettings extends ConsumerWidget {
           ),
         ),
         actions: [
-          FButton(
-            onPress: () => Navigator.of(context).pop(),
-            child: const Text('取消'),
-          ),
-          FButton(
-            onPress: () {
-              if (nameController.text.isNotEmpty &&
-                  modelController.text.isNotEmpty &&
-                  urlController.text.isNotEmpty &&
-                  keyController.text.isNotEmpty) {
-                
-                final newConfig = LLMConfig(
-                  name: nameController.text,
-                  model: modelController.text,
-                  baseUrl: urlController.text,
-                  apiKey: keyController.text,
-                );
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              FButton(
+                onPress: () => Navigator.of(context).pop(),
+                child: const Text('取消'),
+              ),
+              const SizedBox(width: 12),
+              FButton(
+                onPress: () {
+                  if (nameController.text.isNotEmpty &&
+                      modelController.text.isNotEmpty &&
+                      urlController.text.isNotEmpty &&
+                      keyController.text.isNotEmpty) {
+                    
+                    final newConfig = LLMConfig(
+                      name: nameController.text,
+                      model: modelController.text,
+                      baseUrl: urlController.text,
+                      apiKey: keyController.text,
+                    );
 
-                // If editing and name changed, remove old one first
-                if (existingConfig != null && originalName != newConfig.name && originalName != null) {
-                   ref.read(configProvider.notifier).removeModel(originalName);
-                }
+                    // If editing and name changed, remove old one first
+                    if (existingConfig != null && originalName != newConfig.name && originalName != null) {
+                       ref.read(configProvider.notifier).removeModel(originalName);
+                    }
 
-                ref.read(configProvider.notifier).addModel(newConfig);
-                Navigator.of(context).pop();
-              }
-            },
-            child: const Text('保存'),
+                    ref.read(configProvider.notifier).addModel(newConfig);
+                    Navigator.of(context).pop();
+                  }
+                },
+                child: const Text('保存'),
+              ),
+            ],
           ),
         ],
       ),
@@ -130,6 +247,7 @@ class LLMSettings extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final configsAsync = ref.watch(configProvider);
+    final theme = FTheme.of(context);
 
     return configsAsync.when(
       data: (configs) {
@@ -169,6 +287,13 @@ class LLMSettings extends ConsumerWidget {
                                 Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
+                                    FSwitch(
+                                      value: config.isEnabled,
+                                      onChange: (value) {
+                                        ref.read(configProvider.notifier).toggleModel(config.name);
+                                      },
+                                    ),
+                                    const SizedBox(width: 8),
                                     FButton.icon(
                                       onPress: () => _showConfigDialog(context, ref, existingConfig: config),
                                       child: const Icon(Icons.edit, size: 20),
@@ -185,8 +310,8 @@ class LLMSettings extends ConsumerWidget {
                               ],
                             ),
                             const SizedBox(height: 4),
-                            Text('Model: ${config.model}', style: FTheme.of(context).typography.sm),
-                            Text('URL: ${config.baseUrl}', style: FTheme.of(context).typography.sm),
+                            Text('Model: ${config.model}', style: theme.typography.sm),
+                            Text('URL: ${config.baseUrl}', style: theme.typography.sm),
                           ],
                         ),
                       ),
@@ -200,6 +325,197 @@ class LLMSettings extends ConsumerWidget {
       },
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (err, stack) => Center(child: Text('Error: $err')),
+    );
+  }
+}
+class SystemPromptSettings extends ConsumerStatefulWidget {
+  const SystemPromptSettings({super.key});
+
+  @override
+  ConsumerState<SystemPromptSettings> createState() => _SystemPromptSettingsState();
+}
+
+class _SystemPromptSettingsState extends ConsumerState<SystemPromptSettings> {
+  void _showEditDialog([SystemPrompt? prompt]) {
+    final nameController = TextEditingController(text: prompt?.name);
+    final contentController = TextEditingController(text: prompt?.content);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(prompt == null ? '新建系统提示词' : '编辑系统提示词'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            FTextField(
+              controller: nameController,
+              hint: '标题 (例如: 翻译官)',
+            ),
+            const SizedBox(height: 16),
+            FTextField(
+              controller: contentController,
+              hint: '提示词内容',
+              maxLines: 5,
+            ),
+          ],
+        ),
+        actions: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              FButton(
+                onPress: () => Navigator.pop(context),
+                child: const Text('取消'),
+              ),
+              const SizedBox(width: 12),
+              FButton(
+                onPress: () async {
+                  if (nameController.text.isEmpty || contentController.text.isEmpty) return;
+                  
+                  final service = ref.read(systemPromptServiceProvider);
+                  if (prompt == null) {
+                    await service.addPrompt(SystemPrompt(
+                      name: nameController.text,
+                      content: contentController.text,
+                    ));
+                  } else {
+                    await service.updatePrompt(prompt.copyWith(
+                      name: nameController.text,
+                      content: contentController.text,
+                    ));
+                  }
+                  ref.invalidate(systemPromptsProvider);
+                  if (mounted) Navigator.pop(context);
+                },
+                child: const Text('保存'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final promptsAsync = ref.watch(systemPromptsProvider);
+    final theme = FTheme.of(context);
+
+    return Padding(
+      padding: const EdgeInsets.all(24.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('系统提示词', style: theme.typography.xl.copyWith(fontWeight: FontWeight.bold)),
+              FButton(
+                onPress: () => _showEditDialog(),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.add, size: 20),
+                    SizedBox(width: 8),
+                    Text('新建'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Expanded(
+            child: promptsAsync.when(
+              data: (prompts) => ListView.builder(
+                itemCount: prompts.length,
+                itemBuilder: (context, index) {
+                  final prompt = prompts[index];
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: FCard(
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    prompt.name,
+                                    style: theme.typography.lg.copyWith(fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    FSwitch(
+                                      value: prompt.isEnabled,
+                                      onChange: (value) async {
+                                        await ref.read(systemPromptServiceProvider).togglePrompt(prompt.id);
+                                        ref.invalidate(systemPromptsProvider);
+                                      },
+                                    ),
+                                    const SizedBox(width: 8),
+                                    FButton.icon(
+                                      onPress: () => _showEditDialog(prompt),
+                                      child: const Icon(Icons.edit, size: 18),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    FButton.icon(
+                                      onPress: () async {
+                                        final confirm = await showDialog<bool>(
+                                          context: context,
+                                          builder: (context) => AlertDialog(
+                                            title: const Text('确认删除'),
+                                            content: Text('你确定要删除 "${prompt.name}" 吗？'),
+                                            actions: [
+                                              FButton(
+                                                onPress: () => Navigator.pop(context, false),
+                                                child: const Text('取消'),
+                                              ),
+                                              FButton(
+                                                onPress: () => Navigator.pop(context, true),
+                                                child: const Text('删除'),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+
+                                        if (confirm == true) {
+                                          await ref.read(systemPromptServiceProvider).deletePrompt(prompt.id);
+                                          ref.invalidate(systemPromptsProvider);
+                                        }
+                                      },
+                                      child: const Icon(Icons.delete, size: 18),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              prompt.content,
+                              style: theme.typography.base.copyWith(
+                                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (e, s) => Center(child: Text('错误: $e')),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
