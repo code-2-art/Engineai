@@ -73,7 +73,10 @@ class _AiChatState extends ConsumerState<AiChat> {
     
     String title = currentSession.title;
     if (currentSession.messages.isEmpty) {
-      title = prompt.length > 20 ? '${prompt.substring(0, 20)}...' : prompt;
+      final now = DateTime.now();
+      final timestamp = '${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')} ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+      final shortPrompt = prompt.length > 20 ? '${prompt.substring(0, 20)}...' : prompt;
+      title = '$timestamp - $shortPrompt';
     }
 
     await ref.read(sessionListProvider.notifier).updateSession(
@@ -558,10 +561,24 @@ class _AiChatState extends ConsumerState<AiChat> {
                                       childAnchor: Alignment.bottomCenter,
                                       menu: [
                                         FItemGroup(
-                                          children: names.map((name) => FItem(title: Text(name), suffix: currentModel == name ? Icon(Icons.check, size: 16, color: Theme.of(context).colorScheme.primary) : null, onPress: () {
+                                          children: [
+                                            ...names.map((name) => FItem(title: Text(name), suffix: currentModel == name ? Icon(Icons.check, size: 16, color: Theme.of(context).colorScheme.primary) : null, onPress: () {
                                               ref.read(configProvider.notifier).updateDefaultModel(name);
                                             },
-                                          )).toList(),
+                                          )),
+                                            FItem(
+                                              prefix: const Icon(Icons.settings),
+                                              title: const Text('管理模型'),
+                                              onPress: () {
+                                                ref.read(selectedSectionProvider.notifier).state = SettingsSection.models;
+                                                Navigator.of(context).push(
+                                                  MaterialPageRoute(
+                                                    builder: (context) => const SettingsPage(),
+                                                  ),
+                                                );
+                                              },
+                                            ),
+                                          ],
                                         ),
                                       ],
                                       builder: (context, controller, child) => IconButton(
