@@ -250,10 +250,10 @@ class _AiChatState extends ConsumerState<AiChat> {
                         final message = history[index];
                         if (message.isSystem) {
                           return Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+                            padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
                             child: Row(
                               children: [
-                                Expanded(child: Divider(color: Theme.of(context).colorScheme.primary.withOpacity(0.2))),
+                                Expanded(child: Divider(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2), thickness: 1)),
                                 Padding(
                                   padding: const EdgeInsets.symmetric(horizontal: 16),
                                   child: Text(
@@ -265,7 +265,7 @@ class _AiChatState extends ConsumerState<AiChat> {
                                     ),
                                   ),
                                 ),
-                                Expanded(child: Divider(color: Theme.of(context).colorScheme.primary.withOpacity(0.2))),
+                                Expanded(child: Divider(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2), thickness: 1)),
                               ],
                             ),
                           );
@@ -312,7 +312,10 @@ class _AiChatState extends ConsumerState<AiChat> {
                                         ),
                                         child: SelectionArea(
                                           child: MarkdownBody(
-                                            data: message.text,
+                                            data: message.text.replaceAllMapped(
+                                              RegExp(r'^-{3,}\s*$', multiLine: true),
+                                              (match) => '\n\n${match.group(0)!}\n\n',
+                                            ),
                                             inlineSyntaxes: const [],
                                             styleSheet: MarkdownStyleSheet(
                                               p: TextStyle(
@@ -336,6 +339,14 @@ class _AiChatState extends ConsumerState<AiChat> {
                                                   left: BorderSide(
                                                     color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
                                                     width: 4,
+                                                  ),
+                                                ),
+                                              ),
+                                              horizontalRuleDecoration: BoxDecoration(
+                                                border: Border(
+                                                  bottom: BorderSide(
+                                                    color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
+                                                    width: 0.5,
                                                   ),
                                                 ),
                                               ),
@@ -425,7 +436,10 @@ class _AiChatState extends ConsumerState<AiChat> {
                                   ),
                                   child: SelectionArea(
                                     child: MarkdownBody(
-                                      data: currentResponse.isEmpty ? 'AI 正在思考...' : currentResponse,
+                                      data: (currentResponse.isEmpty ? 'AI 正在思考...' : currentResponse).replaceAllMapped(
+                                        RegExp(r'^-{3,}\s*$', multiLine: true),
+                                        (match) => '\n\n${match.group(0)!}\n\n',
+                                      ),
                                       inlineSyntaxes: const [],
                                       styleSheet: MarkdownStyleSheet(
                                         p: TextStyle(
@@ -449,6 +463,14 @@ class _AiChatState extends ConsumerState<AiChat> {
                                             left: BorderSide(
                                               color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
                                               width: 4,
+                                            ),
+                                          ),
+                                        ),
+                                        horizontalRuleDecoration: BoxDecoration(
+                                          border: Border(
+                                            bottom: BorderSide(
+                                              color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
+                                              width: 0.5,
                                             ),
                                           ),
                                         ),
