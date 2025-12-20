@@ -272,7 +272,7 @@ class _AiChatState extends ConsumerState<AiChat> {
                         }
                         final timeStr = "${message.timestamp.year}-${message.timestamp.month.toString().padLeft(2, '0')}-${message.timestamp.day.toString().padLeft(2, '0')} ${message.timestamp.hour.toString().padLeft(2, '0')}:${message.timestamp.minute.toString().padLeft(2, '0')}";
                         return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
                           child: Column(
                             crossAxisAlignment: message.isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                             children: [
@@ -281,9 +281,10 @@ class _AiChatState extends ConsumerState<AiChat> {
                                 child: Text(
                                   "${message.sender ?? (message.isUser ? '我' : 'AI')} • $timeStr",
                                   style: TextStyle(
-                                    fontSize: 12,
-                                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                                    fontSize: 11,
+                                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                                     fontWeight: FontWeight.w500,
+                                    height: 1.2,
                                   ),
                                 ),
                               ),
@@ -291,22 +292,29 @@ class _AiChatState extends ConsumerState<AiChat> {
                                 alignment: message.isUser ? Alignment.centerRight : Alignment.centerLeft,
                                 child: Container(
                                   constraints: BoxConstraints(
-                                    maxWidth: MediaQuery.of(context).size.width * 0.7,
+                                    maxWidth: MediaQuery.of(context).size.width * 0.75,
                                   ),
                                   child: Column(
                                     crossAxisAlignment: message.isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                                     children: [
                                       Container(
-                                        padding: EdgeInsets.all(12),
+                                        padding: const EdgeInsets.all(10),
                                         decoration: BoxDecoration(
                                           color: message.isUser ? Theme.of(context).colorScheme.primaryContainer : Theme.of(context).colorScheme.secondaryContainer,
-                                          borderRadius: BorderRadius.circular(6),
+                                          borderRadius: BorderRadius.circular(18),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black.withOpacity(0.04),
+                                              blurRadius: 8,
+                                              offset: const Offset(0, 2),
+                                            ),
+                                          ],
                                         ),
                                         child: MarkdownBody(
                                           data: message.text,
                                           styleSheet: MarkdownStyleSheet(
                                             p: TextStyle(
-                                              fontSize: 16,
+                                              fontSize: 14,
                                               color: message.isUser ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSecondaryContainer,
                                               fontFamilyFallback: const ['Microsoft YaHei', 'SimSun', 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans CJK SC', 'Arial Unicode MS'],
                                             ),
@@ -372,7 +380,7 @@ class _AiChatState extends ConsumerState<AiChat> {
                       } else {
                         final currentModel = ref.watch(currentModelProvider);
                         return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -381,9 +389,10 @@ class _AiChatState extends ConsumerState<AiChat> {
                                 child: Text(
                                   "$currentModel • 正在输入...",
                                   style: TextStyle(
-                                    fontSize: 12,
-                                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                                    fontSize: 11,
+                                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                                     fontWeight: FontWeight.w500,
+                                    height: 1.2,
                                   ),
                                 ),
                               ),
@@ -391,18 +400,25 @@ class _AiChatState extends ConsumerState<AiChat> {
                                 alignment: Alignment.centerLeft,
                                 child: Container(
                                   constraints: BoxConstraints(
-                                    maxWidth: MediaQuery.of(context).size.width * 0.7,
+                                    maxWidth: MediaQuery.of(context).size.width * 0.75,
                                   ),
-                                  padding: EdgeInsets.all(12),
+                                  padding: const EdgeInsets.all(10),
                                   decoration: BoxDecoration(
                                     color: Theme.of(context).colorScheme.secondaryContainer,
-                                    borderRadius: BorderRadius.circular(12),
+                                    borderRadius: BorderRadius.circular(20),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.04),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
                                   ),
                                   child: MarkdownBody(
                                     data: currentResponse.isEmpty ? 'AI 正在思考...' : currentResponse,
                                     styleSheet: MarkdownStyleSheet(
                                       p: TextStyle(
-                                        fontSize: 16,
+                                        fontSize: 14,
                                         color: Theme.of(context).colorScheme.onSecondaryContainer,
                                         fontFamilyFallback: const ['Microsoft YaHei', 'SimSun', 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans CJK SC', 'Arial Unicode MS'],
                                       ),
@@ -658,7 +674,7 @@ class _AiChatState extends ConsumerState<AiChat> {
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                     ),
                     onSubmitted: (_) => _sendMessage(),
                   ),

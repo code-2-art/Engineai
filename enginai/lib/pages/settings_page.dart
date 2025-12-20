@@ -42,11 +42,11 @@ class SettingsPage extends ConsumerWidget {
 
     return FScaffold(
       header: FHeader.nested(
-        title: const Text('设置'),
+        title: const Text(''),
         prefixes: [
           FButton.icon(
             onPress: () => Navigator.of(context).pop(),
-            child: const Icon(Icons.chevron_left, size: 20),
+            child: const Icon(Icons.chevron_left, size: 14),
           ),
         ],
       ),
@@ -56,7 +56,7 @@ class SettingsPage extends ConsumerWidget {
           children: [
             // Left Sidebar
             Container(
-              width: 180,
+              width: 160,
               child: ListView(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 children: SettingsSection.values.map((section) {
@@ -112,19 +112,19 @@ class GeneralSettings extends ConsumerWidget {
     final theme = FTheme.of(context);
 
     return Padding(
-      padding: const EdgeInsets.all(24.0),
+      padding: const EdgeInsets.all(20.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('通用设置', style: theme.typography.xl.copyWith(fontWeight: FontWeight.bold)),
+          Text('通用设置', style: theme.typography.sm.copyWith(fontWeight: FontWeight.bold)),
           const SizedBox(height: 24),
           FCard(
             child: Padding(
-              padding: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.all(12.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('外观设置', style: theme.typography.lg.copyWith(fontWeight: FontWeight.bold)),
+                  Text('外观设置', style: theme.typography.sm.copyWith(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 16),
                   Row(
                     children: [
@@ -145,15 +145,21 @@ class GeneralSettings extends ConsumerWidget {
                             }).toList(),
                           ),
                         ],
-                        builder: (context, controller, child) => FButton(
-                          onPress: controller.toggle,
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(themeNames[currentIndex]),
-                              const SizedBox(width: 8),
-                              const Icon(Icons.arrow_drop_down, size: 20),
-                            ],
+                        builder: (context, controller, child) => SizedBox(
+                          width: 140,
+                          height: 36,
+                          child: TextButton.icon(
+                            onPressed: controller.toggle,
+                            icon: const Icon(Icons.arrow_drop_down, size: 16),
+                            label: Text(themeNames[currentIndex]),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
                           ),
                         ),
                       ),
@@ -379,27 +385,37 @@ class LLMSettings extends ConsumerWidget {
       data: (configs) {
         final list = configs.values.toList();
         return Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.all(12.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Row(
                 children: [
-                  Expanded(
-                    child: FButton(
-                      onPress: () => _showConfigDialog(context, ref),
-                      child: const Text('添加模型'),
+                  SizedBox(
+                    width: 90,
+                    child: TextButton.icon(
+                      onPressed: () => _showConfigDialog(context, ref),
+                      icon: const Icon(Icons.add, size: 16),
+                      label: const Text('添加'),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),
                   FButton.icon(
                     onPress: () => _handleImport(context, ref),
-                    child: const Icon(Icons.upload_file, size: 20),
+                    child: const Icon(Icons.upload_file, size: 16),
                   ),
                   const SizedBox(width: 8),
                   FButton.icon(
                     onPress: () => _handleExport(context, ref),
-                    child: const Icon(Icons.download, size: 20),
+                    child: const Icon(Icons.download, size: 16),
                   ),
                 ],
               ),
@@ -429,23 +445,26 @@ class LLMSettings extends ConsumerWidget {
                                 Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    FSwitch(
+                                    Checkbox(
                                       value: config.isEnabled,
-                                      onChange: (value) {
+                                      onChanged: (value) {
                                         ref.read(configProvider.notifier).toggleModel(config.name);
                                       },
+                                      visualDensity: VisualDensity.compact,
+                                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                      side: BorderSide.none,
                                     ),
                                     const SizedBox(width: 8),
                                     FButton.icon(
                                       onPress: () => _showConfigDialog(context, ref, existingConfig: config),
-                                      child: const Icon(Icons.edit, size: 20),
+                                      child: const Icon(Icons.edit, size: 16),
                                     ),
                                     const SizedBox(width: 8),
                                     FButton.icon(
                                       onPress: () {
                                         ref.read(configProvider.notifier).removeModel(config.name);
                                       },
-                                      child: const Icon(Icons.delete, size: 20),
+                                      child: const Icon(Icons.delete, size: 16),
                                     ),
                                   ],
                                 ),
@@ -606,31 +625,36 @@ class _SystemPromptSettingsState extends ConsumerState<SystemPromptSettings> {
     final theme = FTheme.of(context);
 
     return Padding(
-      padding: const EdgeInsets.all(24.0),
+      padding: const EdgeInsets.all(20.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('系统提示词', style: theme.typography.xl.copyWith(fontWeight: FontWeight.bold)),
+              Text('系统提示词', style: theme.typography.sm.copyWith(fontWeight: FontWeight.bold)),
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   FButton.icon(
                     onPress: _handleImportPrompt,
-                    child: const Icon(Icons.upload_file, size: 20),
+                    child: const Icon(Icons.upload_file, size: 16),
                   ),
                   const SizedBox(width: 8),
-                  FButton(
-                    onPress: () => _showEditDialog(),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.add, size: 20),
-                        SizedBox(width: 8),
-                        Text('新建'),
-                      ],
+                  SizedBox(
+                    width: 90,
+                    child: TextButton.icon(
+                      onPressed: () => _showEditDialog(),
+                      icon: const Icon(Icons.add, size: 16),
+                      label: const Text('新建'),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
                     ),
                   ),
                 ],
@@ -664,22 +688,25 @@ class _SystemPromptSettingsState extends ConsumerState<SystemPromptSettings> {
                                 Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    FSwitch(
+                                    Checkbox(
                                       value: prompt.isEnabled,
-                                      onChange: (value) async {
+                                      onChanged: (value) async {
                                         await ref.read(systemPromptServiceProvider).togglePrompt(prompt.id);
                                         ref.invalidate(systemPromptsProvider);
                                       },
+                                      visualDensity: VisualDensity.compact,
+                                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                      side: BorderSide.none,
                                     ),
                                     const SizedBox(width: 8),
                                     FButton.icon(
                                       onPress: () => _handleExportPrompt(prompt),
-                                      child: const Icon(Icons.download, size: 18),
+                                      child: const Icon(Icons.download, size: 16),
                                     ),
                                     const SizedBox(width: 8),
                                     FButton.icon(
                                       onPress: () => _showEditDialog(prompt),
-                                      child: const Icon(Icons.edit, size: 18),
+                                      child: const Icon(Icons.edit, size: 16),
                                     ),
                                     const SizedBox(width: 8),
                                     FButton.icon(
@@ -713,7 +740,7 @@ class _SystemPromptSettingsState extends ConsumerState<SystemPromptSettings> {
                                           ref.invalidate(systemPromptsProvider);
                                         }
                                       },
-                                      child: const Icon(Icons.delete, size: 18),
+                                      child: const Icon(Icons.delete, size: 16),
                                     ),
                                   ],
                                 ),
@@ -722,7 +749,7 @@ class _SystemPromptSettingsState extends ConsumerState<SystemPromptSettings> {
                             const SizedBox(height: 8),
                             Text(
                               prompt.content,
-                              style: theme.typography.base.copyWith(
+                              style: theme.typography.xs.copyWith(
                                 color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
                               ),
                               maxLines: 2,

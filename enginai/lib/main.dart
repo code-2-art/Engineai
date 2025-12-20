@@ -68,6 +68,7 @@ class Application extends ConsumerWidget {
       // See https://github.com/forus-labs/forui/issues/670.
       theme: theme.toApproximateMaterialTheme().copyWith(
         textTheme: theme.toApproximateMaterialTheme().textTheme.apply(
+          fontSizeFactor: 0.875,
           fontFamilyFallback: const ['Microsoft YaHei', 'SimSun', 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans CJK SC', 'Arial Unicode MS'],
         ),
       ),

@@ -27,12 +27,12 @@ class _HistoryListState extends ConsumerState<HistoryList> {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
           child: Row(
             children: [
               const Spacer(),
               IconButton(
-                icon: const Icon(Icons.close, size: 20),
+                icon: const Icon(Icons.close, size: 16),
                 onPressed: () => ref.read(rightSidebarCollapsedProvider.notifier).state = true,
                 style: IconButton.styleFrom(
                   backgroundColor: Colors.transparent,
@@ -43,7 +43,7 @@ class _HistoryListState extends ConsumerState<HistoryList> {
         ),
         if (!widget.collapsed)
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             child: Text(
               '历史记录',
               style: FTheme.of(context).typography.xs.copyWith(
@@ -59,11 +59,11 @@ class _HistoryListState extends ConsumerState<HistoryList> {
               final session = sessions[index];
               final isSelected = currentId == session.id;
               return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
                 child: GestureDetector(
                   onSecondaryTapDown: (details) => _showSessionContextMenu(context, ref, session, details.globalPosition),
                   child: FSidebarItem(
-                    icon: const Icon(Icons.chat_bubble_outline, size: 20),
+                    icon: const Icon(Icons.chat_bubble_outline, size: 16),
                     label: widget.collapsed
                         ? const SizedBox.shrink()
                         : Row(
@@ -110,21 +110,21 @@ class _HistoryListState extends ConsumerState<HistoryList> {
         const PopupMenuItem(
           value: 'rename',
           child: ListTile(
-            leading: Icon(Icons.edit_outlined, size: 20),
+            leading: Icon(Icons.edit_outlined, size: 16),
             title: Text('重命名'),
           ),
         ),
         PopupMenuItem(
           value: 'export',
           child: ListTile(
-            leading: Icon(Icons.download_rounded, size: 20),
+            leading: Icon(Icons.download_rounded, size: 16),
             title: Text('导出 Markdown'),
           ),
         ),
         PopupMenuItem(
           value: 'delete',
           child: ListTile(
-            leading: Icon(Icons.delete_outline, size: 20, color: Colors.red),
+            leading: Icon(Icons.delete_outline, size: 16, color: Colors.red),
             title: Text('删除', style: TextStyle(color: Colors.red)),
           ),
         ),
