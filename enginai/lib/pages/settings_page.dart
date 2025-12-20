@@ -56,15 +56,7 @@ class SettingsPage extends ConsumerWidget {
           children: [
             // Left Sidebar
             Container(
-              width: 200,
-              decoration: BoxDecoration(
-                border: Border(
-                  right: BorderSide(
-                    color: Theme.of(context).colorScheme.outlineVariant,
-                    width: 0.5,
-                  ),
-                ),
-              ),
+              width: 180,
               child: ListView(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 children: SettingsSection.values.map((section) {
@@ -88,6 +80,7 @@ class SettingsPage extends ConsumerWidget {
                 }).toList(),
               ),
             ),
+            const FDivider(axis: Axis.vertical),
             // Right Content
             Expanded(
               child: _buildSectionContent(selectedSection),

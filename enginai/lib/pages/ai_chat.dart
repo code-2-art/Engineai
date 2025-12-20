@@ -206,24 +206,27 @@ class _AiChatState extends ConsumerState<AiChat> {
       body: Column(
         children: [
           Padding(
-            padding: EdgeInsets.all(12),
+            padding: const EdgeInsets.all(12),
             child: Row(
               children: [
-                IconButton(
-                  onPressed: () {
-                    ref.read(sidebarCollapsedProvider.notifier).toggle();
-                  },
-                  icon: Consumer(
-                    builder: (context, ref, child) {
-                      final collapsed = ref.watch(sidebarCollapsedProvider);
-                      return Icon(collapsed ? Icons.menu : Icons.menu_open, size: 20);
-                    },
-                  ),
-                  style: IconButton.styleFrom(
-                    backgroundColor: Colors.transparent,
-                  ),
-                ),
                 const Spacer(),
+                Consumer(
+                  builder: (context, ref, child) {
+                    final collapsed = ref.watch(rightSidebarCollapsedProvider);
+                    if (collapsed) {
+                      return IconButton(
+                        onPressed: () {
+                          ref.read(rightSidebarCollapsedProvider.notifier).toggle();
+                        },
+                        icon: const Icon(Icons.history, size: 20),
+                        style: IconButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                        ),
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  },
+                ),
               ],
             ),
           ),

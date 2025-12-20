@@ -61,3 +61,14 @@ class SidebarNotifier extends Notifier<bool> {
 }
 
 final sidebarCollapsedProvider = NotifierProvider<SidebarNotifier, bool>(SidebarNotifier.new);
+
+class RightSidebarNotifier extends Notifier<bool> {
+  @override
+  bool build() => true; // 默认隐藏右侧栏，不存储状态
+
+  void toggle() {
+    state = !state;
+  }
+}
+
+final rightSidebarCollapsedProvider = NotifierProvider<RightSidebarNotifier, bool>(RightSidebarNotifier.new);

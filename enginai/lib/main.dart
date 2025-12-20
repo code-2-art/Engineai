@@ -9,7 +9,6 @@ import 'services/llm_provider.dart';
 import 'services/session_provider.dart';
 import 'models/chat_session.dart';
 import 'theme/theme.dart';
- 
 import 'package:shared_preferences/shared_preferences.dart';
 import 'services/shared_prefs_service.dart';
 import 'package:share_plus/share_plus.dart';
@@ -17,6 +16,7 @@ import 'package:file_picker/file_picker.dart';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'services/chat_history_service.dart';
+import 'widgets/history_list.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -41,7 +41,7 @@ void main() async {
     ),
   );
 }
- 
+
 class Application extends ConsumerWidget {
   const Application({super.key});
 
@@ -55,7 +55,7 @@ class Application extends ConsumerWidget {
     /// ```
     final index = ref.watch(currentThemeIndexProvider);
     final theme = availableThemes[index];
- 
+
     return MaterialApp(
       // TODO: replace with your application's supported locales.
       supportedLocales: FLocalizations.supportedLocales,
@@ -74,184 +74,84 @@ class Application extends ConsumerWidget {
       builder: (_, child) => FAnimatedTheme(data: theme, child: child!),
       // You can also replace FScaffold with Material Scaffold.
       home: FScaffold(
-        sidebar: Consumer(
+        child: Consumer(
           builder: (context, ref, child) {
-            final collapsed = ref.watch(sidebarCollapsedProvider);
+            final rightCollapsed = ref.watch(rightSidebarCollapsedProvider);
             final theme = FTheme.of(context);
-            
-            return AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              width: collapsed ? 64 : 250,
-              child: FSidebar(
-                children: [
-                  const SizedBox(height: 16),
-                  FSidebarItem(
-                    icon: const Icon(Icons.add_circle_outline, size: 22),
-                    label: collapsed ? const SizedBox.shrink() : const Text('新对话'),
-                    onPress: () async {
-                      final session = await ref.read(sessionListProvider.notifier).createNewSession();
-                      ref.read(currentSessionIdProvider.notifier).setSessionId(session.id);
-                    },
-                  ),
-                  const SizedBox(height: 8),
-                  if (!collapsed) ...[
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      child: Text(
-                        '历史记录',
-                        style: theme.typography.xs.copyWith(
-                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                          fontWeight: FontWeight.bold,
-                        ),
+            final materialTheme = Theme.of(context);
+
+            return Stack(
+              children: [
+                Row(
+                  children: [
+                    // 左侧纯图标栏，固定宽度64，预留中间空间
+                    Container(
+                      width: 48,
+                      decoration: BoxDecoration(
+                        color: materialTheme.colorScheme.surface,
+                      ),
+                      child: Column(
+                        children: [
+                          const SizedBox(height: 16),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 2),
+                            child: IconButton(
+                              icon: const Icon(Icons.chat_bubble_outline, size: 20),
+                              onPressed: () async {
+                                final session = await ref.read(sessionListProvider.notifier).createNewSession();
+                                ref.read(currentSessionIdProvider.notifier).setSessionId(session.id);
+                              },
+                            ),
+                          ),
+                          const Spacer(), // 预留中间空间
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 2),
+                            child: IconButton(
+                              icon: const Icon(Icons.settings_outlined, size: 20),
+                              onPressed: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (context) => const SettingsPage(),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // 中间聊天区域
+                    const FDivider(axis: Axis.vertical),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () {
+                          if (!rightCollapsed) {
+                            ref.read(rightSidebarCollapsedProvider.notifier).state = true;
+                          }
+                        },
+                        child: const AiChat(),
                       ),
                     ),
                   ],
-                  ...ref.watch(sessionListProvider).map((session) {
-                    final isSelected = ref.watch(currentSessionIdProvider) == session.id;
-                    return GestureDetector(
-                      onSecondaryTapDown: (details) => _showSessionContextMenu(context, ref, session, details.globalPosition),
-                      child: FSidebarItem(
-                        icon: const Icon(Icons.chat_bubble_outline, size: 20),
-                        label: collapsed ? const SizedBox.shrink() : Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Flexible(
-                              child: Text(
-                                session.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            if (isSelected)
-                              Padding(
-                                padding: const EdgeInsets.only(left: 4),
-                                child: Icon(Icons.edit_outlined, size: 12, color: Theme.of(context).colorScheme.primary.withOpacity(0.5)),
-                              ),
-                          ],
-                        ),
-                        selected: isSelected,
-                        onPress: () {
-                          ref.read(currentSessionIdProvider.notifier).setSessionId(session.id);
-                        },
-                      ),
-                    );
-                  }),
-                  // Removed Spacer() as it causes ParentDataWidget error in FSidebar
-                  const SizedBox(height: 16),
-                ],
-                footer: FSidebarItem(
-                  icon: const Icon(Icons.settings_outlined, size: 22),
-                  label: collapsed ? const SizedBox.shrink() : const Text('设置'),
-                  onPress: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (context) => const SettingsPage(),
-                      ),
-                    );
-                  },
                 ),
-              ),
+                AnimatedPositioned(
+                  duration: const Duration(milliseconds: 200),
+                  right: rightCollapsed ? -280.0 : 0.0,
+                  top: 0,
+                  bottom: 0,
+                  width: 280,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: materialTheme.colorScheme.surfaceVariant,
+                    ),
+                    child: HistoryList(collapsed: false),
+                  ),
+                ),
+              ],
             );
           },
         ),
-        child: const AiChat(),
       ),
     );
-  }
-
-  void _showRenameDialog(BuildContext context, WidgetRef ref, ChatSession session) {
-    final controller = TextEditingController(text: session.title);
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('重命名会话'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(
-            hintText: '输入新名称',
-          ),
-          autofocus: true,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () {
-              final newTitle = controller.text.trim();
-              if (newTitle.isNotEmpty) {
-                ref.read(sessionListProvider.notifier).updateSessionTitle(session.id, newTitle);
-              }
-              Navigator.pop(context);
-            },
-            child: const Text('保存'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showSessionContextMenu(BuildContext context, WidgetRef ref, ChatSession session, Offset position) {
-    final RenderBox overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
-    showMenu(
-      context: context,
-      position: RelativeRect.fromRect(
-        position & const Size(40, 40),
-        Offset.zero & overlay.size,
-      ),
-      items: [
-        const PopupMenuItem(
-          value: 'rename',
-          child: ListTile(
-            leading: Icon(Icons.edit_outlined, size: 20),
-            title: Text('重命名'),
-          ),
-        ),
-        PopupMenuItem(
-          value: 'export',
-          child: ListTile(
-            leading: Icon(Icons.download_rounded, size: 20),
-            title: Text('导出 Markdown'),
-          ),
-        ),
-        PopupMenuItem(
-          value: 'delete',
-          child: ListTile(
-            leading: Icon(Icons.delete_outline, size: 20, color: Colors.red),
-            title: Text('删除', style: TextStyle(color: Colors.red)),
-          ),
-        ),
-      ],
-    ).then((value) {
-      if (value == 'rename') {
-        _showRenameDialog(context, ref, session);
-      } else if (value == 'export') {
-        final md = ref.read(chatHistoryServiceProvider).convertToMarkdown(session);
-        if (kIsWeb || !Platform.isMacOS) {
-          Share.share(md, subject: '${session.title}.md');
-        } else {
-          FilePicker.platform.saveFile(
-            dialogTitle: '导出 Markdown',
-            fileName: '${session.title}.md',
-            type: FileType.custom,
-            allowedExtensions: ['md'],
-          ).then((outputFile) {
-            if (outputFile != null && context.mounted) {
-              File(outputFile).writeAsString(md).then((_) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('导出成功: $outputFile')),
-                );
-              });
-            }
-          });
-        }
-      } else if (value == 'delete') {
-        ref.read(sessionListProvider.notifier).deleteSession(session.id);
-        if (ref.read(currentSessionIdProvider) == session.id) {
-          ref.read(currentSessionIdProvider.notifier).setSessionId(null);
-        }
-      }
-    });
   }
 }
