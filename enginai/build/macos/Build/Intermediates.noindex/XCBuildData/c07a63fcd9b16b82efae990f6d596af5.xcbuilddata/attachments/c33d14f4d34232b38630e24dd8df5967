@@ -1,0 +1,4 @@
+
+module share_plus.__Swift {
+  exclude header "share_plus-Swift.h"
+}
