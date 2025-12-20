@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:forui/forui.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/services.dart';
 import '../theme/theme.dart';
 import '../models/system_prompt.dart';
 import '../services/system_prompt_service.dart';
@@ -183,6 +184,8 @@ class LLMSettings extends ConsumerWidget {
     final modelController = TextEditingController(text: existingConfig?.model);
     final urlController = TextEditingController(text: existingConfig?.baseUrl);
     final keyController = TextEditingController(text: existingConfig?.apiKey);
+    final extraBodyController = TextEditingController(text: existingConfig?.extraBodyJson ?? '');
+    final temperatureController = TextEditingController(text: existingConfig?.temperature?.toString() ?? '');
     
     // Track original name to handle renames
     final originalName = existingConfig?.name;
@@ -202,6 +205,18 @@ class LLMSettings extends ConsumerWidget {
               FTextField(controller: urlController, hint: 'Base URL (e.g. https://api.openai.com/v1)'),
               const SizedBox(height: 8),
               FTextField(controller: keyController, hint: 'API Key', obscureText: true),
+              const SizedBox(height: 8),
+              FTextField(
+                controller: extraBodyController,
+                hint: 'Extra Body JSON (例如 {"reasoning": {"enabled": true}})',
+                maxLines: 3,
+              ),
+              const SizedBox(height: 8),
+              FTextField(
+                controller: temperatureController,
+                hint: 'Temperature (0.0-2.0)',
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              ),
             ],
           ),
         ),
@@ -221,11 +236,29 @@ class LLMSettings extends ConsumerWidget {
                       urlController.text.isNotEmpty &&
                       keyController.text.isNotEmpty) {
                     
+                    String? extraBodyJson;
+                    if (extraBodyController.text.trim().isNotEmpty) {
+                      extraBodyJson = extraBodyController.text.trim();
+                    }
+
+                    double? temperature;
+                    if (temperatureController.text.trim().isNotEmpty) {
+                      temperature = double.tryParse(temperatureController.text.trim());
+                      if (temperature == null || temperature < 0.0 || temperature > 2.0) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Temperature 必须在 0.0 到 2.0 之间')),
+                        );
+                        return;
+                      }
+                    }
+                    
                     final newConfig = LLMConfig(
                       name: nameController.text,
                       model: modelController.text,
                       baseUrl: urlController.text,
                       apiKey: keyController.text,
+                      extraBodyJson: extraBodyJson,
+                      temperature: temperature,
                     );
 
                     // If editing and name changed, remove old one first
@@ -473,6 +506,10 @@ class LLMSettings extends ConsumerWidget {
                             const SizedBox(height: 4),
                             Text('Model: ${config.model}', style: theme.typography.sm),
                             Text('URL: ${config.baseUrl}', style: theme.typography.sm),
+                            if (config.temperature != null)
+                              Text('Temperature: ${config.temperature}', style: theme.typography.sm),
+                            if (config.extraBodyJson != null && config.extraBodyJson!.isNotEmpty)
+                              Text('Extra Body: ${config.extraBodyJson!.length > 30 ? config.extraBodyJson!.substring(0, 30) + '...' : config.extraBodyJson!}', style: theme.typography.sm),
                           ],
                         ),
                       ),

@@ -15,13 +15,16 @@ class LLMConfig {
   final String baseUrl;
   final String model;
   final bool isEnabled;
-
+  final String? extraBodyJson;
+  final double? temperature;
   const LLMConfig({
     required this.name,
     required this.apiKey,
     required this.baseUrl,
     required this.model,
     this.isEnabled = true,
+    this.extraBodyJson,
+    this.temperature,
   });
 
   factory LLMConfig.fromJson(Map<String, dynamic> json) {
@@ -31,6 +34,8 @@ class LLMConfig {
       baseUrl: json['baseUrl'] as String,
       model: json['model'] as String,
       isEnabled: json['isEnabled'] as bool? ?? true,
+      extraBodyJson: json['extraBodyJson'] as String?,
+      temperature: (json['temperature'] as num?)?.toDouble(),
     );
   }
 
@@ -41,6 +46,8 @@ class LLMConfig {
       'baseUrl': baseUrl,
       'model': model,
       'isEnabled': isEnabled,
+      if (extraBodyJson != null) 'extraBodyJson': extraBodyJson,
+      if (temperature != null) 'temperature': temperature,
     };
   }
 
@@ -50,6 +57,8 @@ class LLMConfig {
     String? baseUrl,
     String? model,
     bool? isEnabled,
+    String? extraBodyJson,
+    double? temperature,
   }) {
     return LLMConfig(
       name: name ?? this.name,
@@ -57,6 +66,8 @@ class LLMConfig {
       baseUrl: baseUrl ?? this.baseUrl,
       model: model ?? this.model,
       isEnabled: isEnabled ?? this.isEnabled,
+      extraBodyJson: extraBodyJson ?? this.extraBodyJson,
+      temperature: temperature ?? this.temperature,
     );
   }
 }
@@ -221,11 +232,7 @@ final llmProvider = FutureProvider<LLMProvider>((ref) async {
     }
   }
 
-  return CustomOpenAILLMProvider(
-    apiKey: config!.apiKey,
-    baseUrl: config.baseUrl,
-    model: config.model,
-  );
+  return CustomOpenAILLMProvider(config!);
 });
 
 final modelNamesProvider = FutureProvider<List<String>>((ref) async {
@@ -234,15 +241,9 @@ final modelNamesProvider = FutureProvider<List<String>>((ref) async {
 });
 
 class CustomOpenAILLMProvider implements LLMProvider {
-  final String apiKey;
-  final String baseUrl;
-  final String model;
+  final LLMConfig config;
 
-  const CustomOpenAILLMProvider({
-    required this.apiKey,
-    required this.baseUrl,
-    required this.model,
-  });
+  const CustomOpenAILLMProvider(this.config);
 
   static Stream<String> parseSSE(Stream<List<int>> byteStream) async* {
     final decoder = const Utf8Decoder();
@@ -307,16 +308,24 @@ class CustomOpenAILLMProvider implements LLMProvider {
     ];
 
     final requestBody = {
-      'model': model,
+      'model': config.model,
       'messages': messages,
       'stream': true,
-      'temperature': 0.7,
+      if (config.temperature != null) 'temperature': config.temperature!,
     };
 
+    if (config.extraBodyJson != null && config.extraBodyJson!.isNotEmpty) {
+      try {
+        requestBody['extra_body'] = json.decode(config.extraBodyJson!);
+      } catch (e) {
+        print('解析 extraBodyJson 失败: $e');
+      }
+    }
+
     final client = http.Client();
-    final url = _normalizeUrl(baseUrl);
+    final url = _normalizeUrl(config.baseUrl);
     final request = http.Request('POST', Uri.parse(url))
-      ..headers['Authorization'] = 'Bearer $apiKey'
+      ..headers['Authorization'] = 'Bearer ${config.apiKey}'
       ..headers['Content-Type'] = 'application/json'
       ..body = json.encode(requestBody);
 
