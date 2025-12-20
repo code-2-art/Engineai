@@ -147,6 +147,49 @@ class ConfigNotifier extends AsyncNotifier<Map<String, LLMConfig>> {
     state = AsyncValue.data(newConfigs);
     await _save(newConfigs);
   }
+
+  /// Export current configurations to JSON format compatible with assets/config/llm.json
+  Map<String, dynamic> exportToJson() {
+    final current = state.valueOrNull ?? {};
+    final currentModel = ref.read(currentModelProvider);
+    
+    return {
+      'defaultModel': currentModel,
+      'models': current.values.map((e) => e.toJson()).toList(),
+    };
+  }
+
+  /// Import configurations from JSON
+  /// If [merge] is true, new models will be added and existing ones updated
+  /// If [merge] is false, all existing models will be replaced
+  Future<void> importFromJson(Map<String, dynamic> jsonData, {bool merge = true}) async {
+    final List<dynamic> models = jsonData['models'] ?? [];
+    final String? defaultModel = jsonData['defaultModel'] as String?;
+    
+    Map<String, LLMConfig> newConfigs;
+    
+    if (merge) {
+      // Merge mode: keep existing configs and add/update from import
+      newConfigs = Map<String, LLMConfig>.from(state.valueOrNull ?? {});
+    } else {
+      // Overwrite mode: start fresh
+      newConfigs = {};
+    }
+    
+    // Add/update models from import
+    for (final modelJson in models) {
+      final config = LLMConfig.fromJson(modelJson as Map<String, dynamic>);
+      newConfigs[config.name] = config;
+    }
+    
+    state = AsyncValue.data(newConfigs);
+    await _save(newConfigs);
+    
+    // Update default model if specified and exists
+    if (defaultModel != null && newConfigs.containsKey(defaultModel)) {
+      ref.read(currentModelProvider.notifier).state = defaultModel;
+    }
+  }
 }
 
 final configProvider = AsyncNotifierProvider<ConfigNotifier, Map<String, LLMConfig>>(ConfigNotifier.new);

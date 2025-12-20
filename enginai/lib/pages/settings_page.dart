@@ -1,6 +1,9 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:forui/forui.dart';
+import 'package:file_picker/file_picker.dart';
 import '../theme/theme.dart';
 import '../models/system_prompt.dart';
 import '../services/system_prompt_service.dart';
@@ -19,8 +22,8 @@ final enabledSystemPromptsProvider = FutureProvider<List<SystemPrompt>>((ref) as
 
 enum SettingsSection {
   general('通用', Icons.tune),
-  models('模型设置', Icons.model_training),
-  prompts('系统提示词', Icons.description_outlined);
+  models('模型', Icons.model_training),
+  prompts('人设', Icons.description_outlined);
 
   final String label;
   final IconData icon;
@@ -244,6 +247,136 @@ class LLMSettings extends ConsumerWidget {
     );
   }
 
+  Future<void> _handleExport(BuildContext context, WidgetRef ref) async {
+    try {
+      final jsonData = ref.read(configProvider.notifier).exportToJson();
+      final jsonString = const JsonEncoder.withIndent('  ').convert(jsonData);
+      
+      // Let user choose where to save the file
+      final outputPath = await FilePicker.platform.saveFile(
+        dialogTitle: '保存配置文件',
+        fileName: 'llm_config_export.json',
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+      );
+      
+      if (outputPath != null) {
+        final file = File(outputPath);
+        await file.writeAsString(jsonString);
+        
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('配置已保存到硬盘')),
+          );
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('导出失败: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleImport(BuildContext context, WidgetRef ref) async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+      );
+      
+      if (result == null || result.files.isEmpty) return;
+      
+      final file = File(result.files.single.path!);
+      final jsonString = await file.readAsString();
+      final jsonData = jsonDecode(jsonString) as Map<String, dynamic>;
+      
+      // Show merge/overwrite dialog
+      if (context.mounted) {
+        final shouldMerge = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('导入模式'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('请选择如何导入配置：'),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: FButton(
+                        onPress: () => Navigator.pop(context, true),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.merge_type, size: 32),
+                            const SizedBox(height: 8),
+                            const Text('合并', style: TextStyle(fontWeight: FontWeight.bold)),
+                            const SizedBox(height: 4),
+                            Text(
+                              '保留现有配置\n添加新配置',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: FButton(
+                        onPress: () => Navigator.pop(context, false),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.refresh, size: 32),
+                            const SizedBox(height: 8),
+                            const Text('覆盖', style: TextStyle(fontWeight: FontWeight.bold)),
+                            const SizedBox(height: 4),
+                            Text(
+                              '删除现有配置\n仅使用导入',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            actions: [
+              FButton(
+                onPress: () => Navigator.pop(context),
+                child: const Text('取消'),
+              ),
+            ],
+          ),
+        );
+        
+        if (shouldMerge != null) {
+          await ref.read(configProvider.notifier).importFromJson(jsonData, merge: shouldMerge);
+          
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(shouldMerge ? '配置已合并' : '配置已覆盖')),
+            );
+          }
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('导入失败: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final configsAsync = ref.watch(configProvider);
@@ -257,9 +390,25 @@ class LLMSettings extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              FButton(
-                onPress: () => _showConfigDialog(context, ref),
-                child: const Text('添加模型'),
+              Row(
+                children: [
+                  Expanded(
+                    child: FButton(
+                      onPress: () => _showConfigDialog(context, ref),
+                      child: const Text('添加模型'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  FButton.icon(
+                    onPress: () => _handleImport(context, ref),
+                    child: const Icon(Icons.upload_file, size: 20),
+                  ),
+                  const SizedBox(width: 8),
+                  FButton.icon(
+                    onPress: () => _handleExport(context, ref),
+                    child: const Icon(Icons.download, size: 20),
+                  ),
+                ],
               ),
               const SizedBox(height: 16),
               Expanded(
@@ -396,6 +545,68 @@ class _SystemPromptSettingsState extends ConsumerState<SystemPromptSettings> {
     );
   }
 
+  Future<void> _handleExportPrompt(SystemPrompt prompt) async {
+    try {
+      final markdown = prompt.toMarkdown();
+      
+      // Let user choose where to save the file
+      final outputPath = await FilePicker.platform.saveFile(
+        dialogTitle: '导出系统提示词',
+        fileName: '${prompt.name}.md',
+        type: FileType.custom,
+        allowedExtensions: ['md'],
+      );
+      
+      if (outputPath != null) {
+        final file = File(outputPath);
+        await file.writeAsString(markdown);
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('提示词已导出')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('导出失败: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleImportPrompt() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['md'],
+      );
+      
+      if (result == null || result.files.isEmpty) return;
+      
+      final file = File(result.files.single.path!);
+      final markdown = await file.readAsString();
+      final prompt = SystemPrompt.fromMarkdown(markdown);
+      
+      final service = ref.read(systemPromptServiceProvider);
+      await service.addPrompt(prompt);
+      ref.invalidate(systemPromptsProvider);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('提示词已导入')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('导入失败: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final promptsAsync = ref.watch(systemPromptsProvider);
@@ -410,16 +621,26 @@ class _SystemPromptSettingsState extends ConsumerState<SystemPromptSettings> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text('系统提示词', style: theme.typography.xl.copyWith(fontWeight: FontWeight.bold)),
-              FButton(
-                onPress: () => _showEditDialog(),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.add, size: 20),
-                    SizedBox(width: 8),
-                    Text('新建'),
-                  ],
-                ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  FButton.icon(
+                    onPress: _handleImportPrompt,
+                    child: const Icon(Icons.upload_file, size: 20),
+                  ),
+                  const SizedBox(width: 8),
+                  FButton(
+                    onPress: () => _showEditDialog(),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.add, size: 20),
+                        SizedBox(width: 8),
+                        Text('新建'),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -459,6 +680,11 @@ class _SystemPromptSettingsState extends ConsumerState<SystemPromptSettings> {
                                     ),
                                     const SizedBox(width: 8),
                                     FButton.icon(
+                                      onPress: () => _handleExportPrompt(prompt),
+                                      child: const Icon(Icons.download, size: 18),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    FButton.icon(
                                       onPress: () => _showEditDialog(prompt),
                                       child: const Icon(Icons.edit, size: 18),
                                     ),
@@ -471,13 +697,19 @@ class _SystemPromptSettingsState extends ConsumerState<SystemPromptSettings> {
                                             title: const Text('确认删除'),
                                             content: Text('你确定要删除 "${prompt.name}" 吗？'),
                                             actions: [
-                                              FButton(
-                                                onPress: () => Navigator.pop(context, false),
-                                                child: const Text('取消'),
-                                              ),
-                                              FButton(
-                                                onPress: () => Navigator.pop(context, true),
-                                                child: const Text('删除'),
+                                              Row(
+                                                mainAxisAlignment: MainAxisAlignment.end,
+                                                children: [
+                                                  FButton(
+                                                    onPress: () => Navigator.pop(context, false),
+                                                    child: const Text('取消'),
+                                                  ),
+                                                  const SizedBox(width: 12),
+                                                  FButton(
+                                                    onPress: () => Navigator.pop(context, true),
+                                                    child: const Text('删除'),
+                                                  ),
+                                                ],
                                               ),
                                             ],
                                           ),

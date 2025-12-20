@@ -194,7 +194,7 @@ class _AiChatState extends ConsumerState<AiChat> {
     final sessions = ref.watch(sessionListProvider);
     
     final currentSession = sessionId != null 
-        ? sessions.firstWhere((s) => s.id == sessionId, orElse: () => throw Exception('Session not found'))
+        ? sessions.firstWhere((s) => s.id == sessionId, orElse: () => sessions.isNotEmpty ? sessions.first : ChatSession(id: '', title: '', messages: []))
         : null;
     final history = currentSession?.messages ?? [];
 
