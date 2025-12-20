@@ -545,7 +545,7 @@ class _AiChatState extends ConsumerState<AiChat> {
                                   data: (names) {
                                     if (names.isEmpty) {
                                       return IconButton(
-                                        icon: const Icon(Icons.smart_toy_outlined, size: 14),
+                                        icon: const Icon(Icons.model_training, size: 14),
                                         tooltip: '无可用模型',
                                         constraints: const BoxConstraints(maxWidth: 32, maxHeight: 32),
                                         padding: EdgeInsets.zero,
@@ -567,7 +567,7 @@ class _AiChatState extends ConsumerState<AiChat> {
                                             },
                                           )),
                                             FItem(
-                                              prefix: const Icon(Icons.settings),
+                                              prefix: const Icon(Icons.model_training),
                                               title: const Text('管理模型'),
                                               onPress: () {
                                                 ref.read(selectedSectionProvider.notifier).state = SettingsSection.models;
@@ -582,7 +582,7 @@ class _AiChatState extends ConsumerState<AiChat> {
                                         ),
                                       ],
                                       builder: (context, controller, child) => IconButton(
-                                        icon: const Icon(Icons.smart_toy_outlined, size: 14),
+                                        icon: const Icon(Icons.model_training, size: 14),
                                         tooltip: '切换模型',
                                         constraints: const BoxConstraints(maxWidth: 32, maxHeight: 32),
                                         padding: EdgeInsets.zero,
