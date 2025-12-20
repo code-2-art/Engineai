@@ -28,9 +28,11 @@ class _AiChatState extends ConsumerState<AiChat> {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   bool _isSending = false;
+  StreamSubscription<String>? _responseSubscription;
 
   @override
   void dispose() {
+    _responseSubscription?.cancel();
     _controller.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -46,106 +48,148 @@ class _AiChatState extends ConsumerState<AiChat> {
     }
   }
 
-  Future<void> _sendMessage() async {
-    final prompt = _controller.text.trim();
-    if (prompt.isEmpty || _isSending) return;
-
-    print('AiChat: _sendMessage started. Prompt: $prompt');
-    // We don't lock immediately to allow retries during long provider initialization
-    // if the user clicks again. We will lock just before the stream starts.
-
-    try {
-      var sessionId = ref.read(currentSessionIdProvider);
-      print('AiChat: current sessionId: $sessionId');
-    if (sessionId == null) {
-      print('AiChat: Creating new session...');
-      final newSession = await ref.read(sessionListProvider.notifier).createNewSession();
-      sessionId = newSession.id;
-      ref.read(currentSessionIdProvider.notifier).setSessionId(sessionId);
-      print('AiChat: New session created: $sessionId');
-    }
-
-    final currentSession = ref.read(sessionListProvider).firstWhere((s) => s.id == sessionId);
-    
+  Future<void> _addAIMessage() async {
+    final fullResponse = ref.read(currentResponseProvider);
+    if (fullResponse.isEmpty) return;
+    final sessionId = ref.read(currentSessionIdProvider);
+    if (sessionId == null) return;
     final currentModel = ref.read(currentModelProvider);
-    final userMessage = Message(isUser: true, text: prompt, sender: '我');
-    final updatedMessages = [...currentSession.messages, userMessage];
-    
-    String title = currentSession.title;
-    if (currentSession.messages.isEmpty) {
-      final now = DateTime.now();
-      final timestamp = '${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')} ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
-      final shortPrompt = prompt.length > 20 ? '${prompt.substring(0, 20)}...' : prompt;
-      title = '$timestamp - $shortPrompt';
-    }
-
+    final aiMessage = Message(isUser: false, text: fullResponse, sender: currentModel);
+    final session = ref.read(sessionListProvider).firstWhere((s) => s.id == sessionId);
     await ref.read(sessionListProvider.notifier).updateSession(
-      currentSession.copyWith(messages: updatedMessages, title: title)
+      session.copyWith(messages: [...session.messages, aiMessage])
     );
-
-    _controller.clear();
-    _scrollToBottom();
-
     ref.read(currentResponseProvider.notifier).state = '';
+    _scrollToBottom();
+  }
 
-    print('AiChat: Fetching LLM provider...');
-    final llmFuture = ref.read(llmProvider.future);
-    final llm = await llmFuture;
-    print('AiChat: LLM provider ready.');
-
+  void _stopGenerating() {
+    print('AiChat: Stopping generation...');
+    _responseSubscription?.cancel();
+    _addAIMessage();
     if (mounted) {
       setState(() {
-        _isSending = true;
+        _isSending = false;
       });
     }
-    
-    // Pass currentSession.messages (the history BEFORE the new user message) 
-    // because generateStream adds the prompt itself.
-    // Prune history based on separators
-    final fullHistory = currentSession.messages;
-    final lastClearIndex = fullHistory.lastIndexWhere((m) => m.isSystem);
-    final effectiveHistory = lastClearIndex == -1 
-        ? fullHistory 
-        : fullHistory.sublist(lastClearIndex + 1);
-
-    print('AiChat: Starting stream with ${effectiveHistory.length} messages in history...');
-    final stream = llm.generateStream(effectiveHistory, prompt, systemPrompt: currentSession.systemPrompt);
-
-    await for (final delta in stream) {
-      if (delta.isEmpty) continue;
-      final current = ref.read(currentResponseProvider);
-      ref.read(currentResponseProvider.notifier).state = current + delta;
-      _scrollToBottom();
-    }
-    print('AiChat: Stream finished.');
-
-    final fullResponse = ref.read(currentResponseProvider);
-    if (fullResponse.isNotEmpty) {
-      final currentModel = ref.read(currentModelProvider);
-      final aiMessage = Message(isUser: false, text: fullResponse, sender: currentModel);
-      final sessionAfterStream = ref.read(sessionListProvider).firstWhere((s) => s.id == sessionId);
-      await ref.read(sessionListProvider.notifier).updateSession(
-        sessionAfterStream.copyWith(messages: [...sessionAfterStream.messages, aiMessage])
-      );
-      ref.read(currentResponseProvider.notifier).state = '';
-      _scrollToBottom();
-    }
-  } catch (e) {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('发送失败: $e')),
+        SnackBar(
+          content: const Text('已停止生成'),
+          behavior: SnackBarBehavior.floating,
+          width: 200,
+        ),
       );
     }
-    // Reset state on error so user can try again
+  }
+
+  void _resetSendingState() {
     ref.read(currentResponseProvider.notifier).state = '';
-  } finally {
     if (mounted) {
       setState(() {
         _isSending = false;
       });
     }
   }
-}
+
+  Future<void> _sendMessage() async {
+    final prompt = _controller.text.trim();
+    if (prompt.isEmpty || _isSending) return;
+
+    print('AiChat: _sendMessage started. Prompt: $prompt');
+
+    try {
+      var sessionId = ref.read(currentSessionIdProvider);
+      print('AiChat: current sessionId: $sessionId');
+      if (sessionId == null) {
+        print('AiChat: Creating new session...');
+        final newSession = await ref.read(sessionListProvider.notifier).createNewSession();
+        sessionId = newSession.id;
+        ref.read(currentSessionIdProvider.notifier).setSessionId(sessionId);
+        print('AiChat: New session created: $sessionId');
+      }
+
+      final currentSession = ref.read(sessionListProvider).firstWhere((s) => s.id == sessionId);
+      
+      final currentModel = ref.read(currentModelProvider);
+      final userMessage = Message(isUser: true, text: prompt, sender: '我');
+      final updatedMessages = [...currentSession.messages, userMessage];
+      
+      String title = currentSession.title;
+      if (currentSession.messages.isEmpty) {
+        final now = DateTime.now();
+        final timestamp = '${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')} ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+        final shortPrompt = prompt.length > 20 ? '${prompt.substring(0, 20)}...' : prompt;
+        title = '$timestamp - $shortPrompt';
+      }
+
+      await ref.read(sessionListProvider.notifier).updateSession(
+        currentSession.copyWith(messages: updatedMessages, title: title)
+      );
+
+      _controller.clear();
+      _scrollToBottom();
+
+      ref.read(currentResponseProvider.notifier).state = '';
+
+      print('AiChat: Fetching LLM provider...');
+      final llmFuture = ref.read(llmProvider.future);
+      final llm = await llmFuture;
+      print('AiChat: LLM provider ready.');
+
+      if (!mounted) return;
+
+      setState(() {
+        _isSending = true;
+      });
+
+      // Prune history based on separators (history before user message)
+      final fullHistory = currentSession.messages;
+      final lastClearIndex = fullHistory.lastIndexWhere((m) => m.isSystem);
+      final effectiveHistory = lastClearIndex == -1
+          ? fullHistory
+          : fullHistory.sublist(lastClearIndex + 1);
+
+      print('AiChat: Starting stream with ${effectiveHistory.length} messages in history...');
+      final stream = llm.generateStream(effectiveHistory, prompt, systemPrompt: currentSession.systemPrompt);
+
+      _responseSubscription?.cancel();
+      _responseSubscription = stream.listen(
+        (delta) {
+          if (delta.isEmpty || !mounted) return;
+          final current = ref.read(currentResponseProvider);
+          ref.read(currentResponseProvider.notifier).state = current + delta;
+          _scrollToBottom();
+        },
+        onDone: () {
+          print('AiChat: Stream finished.');
+          _addAIMessage();
+          if (mounted) {
+            setState(() {
+              _isSending = false;
+            });
+          }
+        },
+        onError: (e) {
+          print('AiChat: Stream error: $e');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('生成失败: $e')),
+            );
+          }
+          _resetSendingState();
+        },
+      );
+    } catch (e) {
+      print('AiChat: _sendMessage error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('发送失败: $e')),
+        );
+      }
+      _resetSendingState();
+    }
+  }
 
   Future<void> _exportToMarkdown() async {
     final sessionId = ref.read(currentSessionIdProvider);
@@ -721,12 +765,10 @@ class _AiChatState extends ConsumerState<AiChat> {
                 ),
                 const SizedBox(width: 8),
                 IconButton(
-                  onPressed: _isSending ? null : _sendMessage,
+                  onPressed: _isSending ? _stopGenerating : _sendMessage,
                   icon: Icon(
-                    Icons.send_rounded,
-                    color: _isSending 
-                        ? Theme.of(context).colorScheme.primary.withOpacity(0.5)
-                        : Theme.of(context).colorScheme.primary,
+                    _isSending ? Icons.stop : Icons.send_rounded,
+                    color: Theme.of(context).colorScheme.primary,
                   ),
                   style: IconButton.styleFrom(
                     shape: const CircleBorder(),
