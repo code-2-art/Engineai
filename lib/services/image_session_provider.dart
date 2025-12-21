@@ -84,5 +84,10 @@ final currentImageSessionProvider = Provider<ImageSession?>((ref) {
   final id = ref.watch(currentImageSessionIdProvider);
   if (id == null) return null;
   final sessions = ref.watch(imageSessionListProvider);
-  return sessions.firstWhere((s) => s.id == id, orElse: () => throw Exception('Image Session not found'));
+  for (final session in sessions) {
+    if (session.id == id) {
+      return session;
+    }
+  }
+  return null;
 });

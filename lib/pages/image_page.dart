@@ -6,40 +6,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:forui/forui.dart';
 import 'package:pro_image_editor/pro_image_editor.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:flutter/services.dart' as services;
 import '../services/llm_provider.dart';
 import '../services/image_provider.dart';
-import '../services/session_provider.dart';
-import 'package:flutter/services.dart' as services;
+import '../services/image_session_provider.dart';
+import '../models/image_message.dart';
+import '../models/image_session.dart';
 
-class ImageMessage {
-  final String prompt;
-  final Uint8List image;
-  final String? aiDescription;
-  final DateTime timestamp;
-
-  ImageMessage(this.prompt, this.image, this.aiDescription, [DateTime? timestamp]) : timestamp = timestamp ?? DateTime.now();
-
-  factory ImageMessage.fromJson(Map<String, dynamic> json) {
-    final prompt = json['prompt'] as String;
-    final imageBase64 = json['imageBase64'] as String;
-    final image = base64Decode(imageBase64) as Uint8List;
-    final aiDescription = json['aiDescription'] as String?;
-    final timestampStr = json['timestamp'] as String;
-    final timestamp = DateTime.parse(timestampStr);
-    return ImageMessage(prompt, image, aiDescription, timestamp);
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'prompt': prompt,
-      'imageBase64': base64Encode(image),
-      'aiDescription': aiDescription,
-      'timestamp': timestamp.toIso8601String(),
-    };
-  }
-}
 
 class ImagePage extends ConsumerStatefulWidget {
   const ImagePage({super.key});
@@ -51,7 +25,7 @@ class ImagePage extends ConsumerStatefulWidget {
 class _ImagePageState extends ConsumerState<ImagePage> {
   final TextEditingController _promptController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  List<ImageMessage> _history = [];
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   bool _isGenerating = false;
 
   Widget _buildModelSelector(BuildContext context, WidgetRef ref) {
@@ -106,43 +80,16 @@ class _ImagePageState extends ConsumerState<ImagePage> {
   @override
   void initState() {
     super.initState();
-    _loadHistory();
   }
 
   @override
   void dispose() {
-    _saveHistory();
     _promptController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
 
-  Future<void> _loadHistory() async {
-    try {
-      final dir = await getApplicationDocumentsDirectory();
-      final file = File('${dir.path}/image_history.json');
-      if (await file.exists()) {
-        final jsonStr = await file.readAsString();
-        final List<dynamic> list = json.decode(jsonStr);
-        setState(() {
-          _history = list.map((j) => ImageMessage.fromJson(j)).toList();
-        });
-      }
-    } catch (e) {
-      debugPrint('Load image history error: $e');
-    }
-  }
 
-  Future<void> _saveHistory() async {
-    try {
-      final dir = await getApplicationDocumentsDirectory();
-      final file = File('${dir.path}/image_history.json');
-      final List<Map<String, dynamic>> list = _history.map((m) => m.toJson()).toList();
-      await file.writeAsString(json.encode(list));
-    } catch (e) {
-      debugPrint('Save image history error: $e');
-    }
-  }
 
   void _scrollToBottom() {
     if (_scrollController.hasClients) {
@@ -161,24 +108,32 @@ class _ImagePageState extends ConsumerState<ImagePage> {
     setState(() => _isGenerating = true);
 
     try {
+      final currentSessionOpt = ref.read(currentImageSessionProvider);
+      ImageSession currentSession;
+      if (currentSessionOpt == null) {
+        final newSession = await ref.read(imageSessionListProvider.notifier).createNewSession();
+        await ref.read(currentImageSessionIdProvider.notifier).setSessionId(newSession.id);
+        currentSession = newSession;
+      } else {
+        currentSession = currentSessionOpt;
+      }
+
       final generator = await ref.read(imageGeneratorProvider.future);
       String? base64Image;
       String? mimeType;
-      if (_history.isNotEmpty) {
-        final lastBytes = _history.last.image;
+      if (currentSession.messages.isNotEmpty) {
+        final lastBytes = currentSession.messages.last.image;
         base64Image = base64Encode(lastBytes);
         mimeType = 'image/png';
       }
       final result = await generator.generateImage(prompt, base64Image: base64Image, mimeType: mimeType);
       if (result.imageBytes != null) {
-        final messagePrompt = _history.isNotEmpty ? '编辑：$prompt' : prompt;
+        final messagePrompt = currentSession.messages.isNotEmpty ? '编辑：$prompt' : prompt;
         final message = ImageMessage(messagePrompt, result.imageBytes!, result.description);
-        setState(() {
-          _history.add(message);
-        });
+        final updatedSession = currentSession.copyWith(messages: [...currentSession.messages, message]);
+        await ref.read(imageSessionListProvider.notifier).updateSession(updatedSession);
         _promptController.clear();
         _scrollToBottom();
-        _saveHistory();
       }
     } catch (e) {
       final errorMsg = e.toString();
@@ -235,16 +190,27 @@ class _ImagePageState extends ConsumerState<ImagePage> {
         }
         final name = file.name.isNotEmpty ? file.name : 'image.${file.extension ?? 'jpg'}';
         final message = ImageMessage('上传：$name', bytes, null);
-        setState(() {
-          _history.add(message);
-          _promptController.clear();
-        });
+
+        final currentSessionOpt = ref.read(currentImageSessionProvider);
+        ImageSession currentSession;
+        if (currentSessionOpt == null) {
+          final newSession = await ref.read(imageSessionListProvider.notifier).createNewSession();
+          await ref.read(currentImageSessionIdProvider.notifier).setSessionId(newSession.id);
+          currentSession = newSession;
+        } else {
+          currentSession = currentSessionOpt;
+        }
+        final updatedSession = currentSession.copyWith(messages: [...currentSession.messages, message]);
+        await ref.read(imageSessionListProvider.notifier).updateSession(updatedSession);
+        _promptController.clear();
         _scrollToBottom();
       }
     }
 
   Future<void> _editImage(int index) async {
-    final originalBytes = Uint8List.fromList(_history[index].image);
+    final currentSession = ref.read(currentImageSessionProvider);
+    if (currentSession == null) return;
+    final originalBytes = Uint8List.fromList(currentSession.messages[index].image);
     Navigator.of(context).push(MaterialPageRoute(
       builder: (context) => Scaffold(
         appBar: AppBar(title: const Text('编辑图像')),
@@ -253,11 +219,10 @@ class _ImagePageState extends ConsumerState<ImagePage> {
           callbacks: ProImageEditorCallbacks(
             onImageEditingComplete: (Uint8List newBytes) async {
               Navigator.pop(context);
-              final editedPrompt = '${_history[index].prompt} (编辑)';
-              final editedMessage = ImageMessage(editedPrompt, newBytes, null, DateTime.now());
-              setState(() {
-                _history.add(editedMessage);
-              });
+              final editedPrompt = '${currentSession.messages[index].prompt} (编辑)';
+              final editedMessage = ImageMessage(editedPrompt, newBytes, null);
+              final updatedSession = currentSession.copyWith(messages: [...currentSession.messages, editedMessage]);
+              await ref.read(imageSessionListProvider.notifier).updateSession(updatedSession);
               _scrollToBottom();
             },
           ),
@@ -267,7 +232,9 @@ class _ImagePageState extends ConsumerState<ImagePage> {
   }
 
   Future<void> _downloadImage(int index) async {
-    final bytes = _history[index].image;
+    final currentSession = ref.read(currentImageSessionProvider);
+    if (currentSession == null) return;
+    final bytes = currentSession.messages[index].image;
     final outputFile = await FilePicker.platform.saveFile(
       dialogTitle: '保存图像',
       fileName: 'generated_image_${DateTime.now().millisecondsSinceEpoch}.png',
@@ -284,22 +251,122 @@ class _ImagePageState extends ConsumerState<ImagePage> {
   }
 
   void _deleteImage(int index) {
-    setState(() {
-      _history.removeAt(index);
-    });
+    final currentSession = ref.read(currentImageSessionProvider);
+    if (currentSession == null) return;
+    final newMessages = List<ImageMessage>.from(currentSession.messages)..removeAt(index);
+    final updatedSession = currentSession.copyWith(messages: newMessages);
+    ref.read(imageSessionListProvider.notifier).updateSession(updatedSession);
+  }
+
+  Widget _buildSessionsDrawer(BuildContext context, WidgetRef ref) {
+    final sessions = ref.watch(imageSessionListProvider);
+    return Drawer(
+      child: Column(
+        children: [
+          const DrawerHeader(
+            child: Text(
+              '图像会话历史',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+          ),
+          Expanded(
+            child: ListView.builder(
+              itemCount: sessions.length,
+              itemBuilder: (context, index) {
+                final session = sessions[index];
+                final lastPrompt = session.messages.isNotEmpty
+                  ? session.messages.last.prompt
+                  : '空会话';
+                final timeStr = '${session.createdAt.hour.toString().padLeft(2, '0')}:${session.createdAt.minute.toString().padLeft(2, '0')}';
+                final currentId = ref.read(currentImageSessionIdProvider);
+                final isCurrent = session.id == currentId;
+                return ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: isCurrent
+                      ? Theme.of(context).colorScheme.primary
+                      : Colors.grey,
+                    child: Text('${index + 1}'),
+                  ),
+                  title: Text(session.title),
+                  subtitle: Text(
+                    lastPrompt.length > 40
+                      ? '${lastPrompt.substring(0, 40)}...'
+                      : lastPrompt,
+                  ),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete, size: 20),
+                    onPressed: () async {
+                      await ref.read(imageSessionListProvider.notifier).deleteSession(session.id);
+                      if (isCurrent) {
+                        ref.read(currentImageSessionIdProvider.notifier).setSessionId(null);
+                      }
+                      Navigator.pop(context);
+                    },
+                  ),
+                  selected: isCurrent,
+                  selectedTileColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                  onTap: () {
+                    ref.read(currentImageSessionIdProvider.notifier).setSessionId(session.id);
+                    Navigator.pop(context);
+                  },
+                );
+              },
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.add),
+            title: const Text('新建会话'),
+            onTap: () async {
+              final newSession = await ref.read(imageSessionListProvider.notifier).createNewSession();
+              ref.read(currentImageSessionIdProvider.notifier).setSessionId(newSession.id);
+              Navigator.pop(context);
+            },
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final modelNamesAsync = ref.watch(modelNamesProvider);
-    final currentModel = ref.watch(currentModelProvider);
+    final currentSession = ref.watch(currentImageSessionProvider);
+    final messages = currentSession?.messages ?? <ImageMessage>[];
+    final currentTitle = currentSession?.title ?? '新图像会话';
 
     return Scaffold(
+      key: _scaffoldKey,
+      endDrawer: _buildSessionsDrawer(context, ref),
       backgroundColor: Colors.transparent,
       body: Column(
         children: [
+          // Top bar
+          Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Row(
+              children: [
+                Text(
+                  currentTitle,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.add),
+                  tooltip: '新建会话',
+                  onPressed: () async {
+                    final newSession = await ref.read(imageSessionListProvider.notifier).createNewSession();
+                    ref.read(currentImageSessionIdProvider.notifier).setSessionId(newSession.id);
+                  },
+                ),
+                IconButton(
+                  icon: const Icon(Icons.history),
+                  tooltip: '会话历史',
+                  onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
+                ),
+              ],
+            ),
+          ),
           Expanded(
-            child: _history.isEmpty
+            child: messages.isEmpty
                 ? Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -315,10 +382,10 @@ class _ImagePageState extends ConsumerState<ImagePage> {
                 : ListView.builder(
                     controller: _scrollController,
                     reverse: true,
-                    itemCount: _history.length,
+                    itemCount: messages.length,
                     itemBuilder: (context, index) {
-                      final reversedIndex = _history.length - 1 - index;
-                      final msg = _history[reversedIndex];
+                      final reversedIndex = messages.length - 1 - index;
+                      final msg = messages[reversedIndex];
                       final timeStr = '${msg.timestamp.hour.toString().padLeft(2, '0')}:${msg.timestamp.minute.toString().padLeft(2, '0')}';
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
@@ -450,7 +517,7 @@ class _ImagePageState extends ConsumerState<ImagePage> {
                   child: TextField(
                     controller: _promptController,
                     decoration: InputDecoration(
-                      hintText: _isGenerating ? '生成中...' : (_history.isEmpty ? '描述图像，例如: \"一只可爱的猫在太空飞翔\"' : '编辑最后一张图片，例如: \"把猫的眼睛变成红色激光眼\"'),
+                      hintText: _isGenerating ? '生成中...' : (messages.isEmpty ? '描述图像，例如: \"一只可爱的猫在太空飞翔\"' : '编辑最后一张图片，例如: \"把猫的眼睛变成红色激光眼\"'),
                       prefixIcon: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
