@@ -220,13 +220,19 @@ class _ImagePageState extends ConsumerState<ImagePage> {
   }
 
   Future<void> _uploadImage() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.image,
-    );
-    if (result != null && result.files.isNotEmpty) {
-      final file = result.files.first;
-      if (file.bytes != null) {
-        final bytes = file.bytes!;
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.image,
+      );
+      if (result != null && result.files.isNotEmpty) {
+        final file = result.files.first;
+        Uint8List bytes;
+        if (file.bytes != null) {
+          bytes = file.bytes!;
+        } else if (file.path != null) {
+          bytes = await File(file.path!).readAsBytes();
+        } else {
+          return;
+        }
         final name = file.name.isNotEmpty ? file.name : 'image.${file.extension ?? 'jpg'}';
         final message = ImageMessage('上传：$name', bytes, null);
         setState(() {
@@ -236,7 +242,6 @@ class _ImagePageState extends ConsumerState<ImagePage> {
         _scrollToBottom();
       }
     }
-  }
 
   Future<void> _editImage(int index) async {
     final originalBytes = Uint8List.fromList(_history[index].image);
@@ -441,75 +446,82 @@ class _ImagePageState extends ConsumerState<ImagePage> {
             padding: const EdgeInsets.only(left: 12, right: 12, bottom: 12),
             child: Row(
               children: [
-                IconButton(
-                  icon: const Icon(Icons.upload_file),
-                  tooltip: '上传图像',
-                  constraints: const BoxConstraints(maxWidth: 32, maxHeight: 32),
-                  padding: EdgeInsets.zero,
-                  style: IconButton.styleFrom(
-                    shape: const CircleBorder(),
-                    hoverColor: Theme.of(context).colorScheme.primary.withOpacity(0.08),
-                  ),
-                  onPressed: _uploadImage,
-                ),
-                const SizedBox(width: 8),
                 Expanded(
                   child: TextField(
                     controller: _promptController,
                     decoration: InputDecoration(
                       hintText: _isGenerating ? '生成中...' : (_history.isEmpty ? '描述图像，例如: \"一只可爱的猫在太空飞翔\"' : '编辑最后一张图片，例如: \"把猫的眼睛变成红色激光眼\"'),
-                      prefixIcon: Padding(
-                        padding: const EdgeInsets.only(left: 8),
-                        child: Consumer(
-                          builder: (context, ref, child) {
-                            final namesAsync = ref.watch(modelNamesProvider);
-                            final currentModel = ref.watch(currentModelProvider);
-                            return namesAsync.when(
-                              data: (names) {
-                                if (names.isEmpty) {
-                                  return const SizedBox(width: 32, height: 32);
-                                }
-                                return FPopoverMenu(
-                                  menuAnchor: Alignment.topCenter,
-                                  childAnchor: Alignment.bottomCenter,
-                                  menu: [
-                                    FItemGroup(
-                                      children: names.map((name) => FItem(
-                                        title: Text(name),
-                                        suffix: currentModel == name
-                                          ? Icon(Icons.check, size: 16, color: Theme.of(context).colorScheme.primary)
-                                          : null,
-                                        onPress: () {
-                                          ref.read(currentModelProvider.notifier).state = name;
-                                          ref.read(configProvider.notifier).updateDefaultModel(name);
-                                        },
-                                      )).toList(),
+                      prefixIcon: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.upload_file, size: 20),
+                            tooltip: '上传图像',
+                            constraints: const BoxConstraints(
+                              minWidth: 32,
+                              maxWidth: 32,
+                              minHeight: 32,
+                              maxHeight: 32,
+                            ),
+                            padding: EdgeInsets.zero,
+                            style: IconButton.styleFrom(
+                              shape: const CircleBorder(),
+                              hoverColor: Theme.of(context).colorScheme.primary.withOpacity(0.08),
+                            ),
+                            onPressed: _uploadImage,
+                          ),
+                          const SizedBox(width: 8),
+                          Consumer(
+                            builder: (context, ref, child) {
+                              final namesAsync = ref.watch(modelNamesProvider);
+                              final currentModel = ref.watch(currentModelProvider);
+                              return namesAsync.when(
+                                data: (names) {
+                                  if (names.isEmpty) {
+                                    return const SizedBox(width: 32, height: 32);
+                                  }
+                                  return FPopoverMenu(
+                                    menuAnchor: Alignment.topCenter,
+                                    childAnchor: Alignment.bottomCenter,
+                                    menu: [
+                                      FItemGroup(
+                                        children: names.map((name) => FItem(
+                                          title: Text(name),
+                                          suffix: currentModel == name
+                                            ? Icon(Icons.check, size: 16, color: Theme.of(context).colorScheme.primary)
+                                            : null,
+                                          onPress: () {
+                                            ref.read(currentModelProvider.notifier).state = name;
+                                            ref.read(configProvider.notifier).updateDefaultModel(name);
+                                          },
+                                        )).toList(),
+                                      ),
+                                    ],
+                                    builder: (context, controller, child) => IconButton(
+                                      icon: const Icon(Icons.model_training, size: 20),
+                                      tooltip: '切换模型',
+                                      constraints: const BoxConstraints(maxWidth: 32, maxHeight: 32),
+                                      padding: EdgeInsets.zero,
+                                      style: IconButton.styleFrom(
+                                        shape: const CircleBorder(),
+                                        hoverColor: Theme.of(context).colorScheme.primary.withOpacity(0.08),
+                                      ),
+                                      onPressed: controller.toggle,
                                     ),
-                                  ],
-                                  builder: (context, controller, child) => IconButton(
-                                    icon: const Icon(Icons.model_training, size: 14),
-                                    tooltip: '切换模型',
-                                    constraints: const BoxConstraints(maxWidth: 32, maxHeight: 32),
-                                    padding: EdgeInsets.zero,
-                                    style: IconButton.styleFrom(
-                                      shape: const CircleBorder(),
-                                      hoverColor: Theme.of(context).colorScheme.primary.withOpacity(0.08),
-                                    ),
-                                    onPressed: controller.toggle,
-                                  ),
-                                );
-                              },
-                              loading: () => const SizedBox(width: 32, height: 32),
-                              error: (err, stack) => IconButton(
-                                icon: const Icon(Icons.error_outline, size: 14, color: Colors.red),
-                                tooltip: '加载模型失败',
-                                constraints: const BoxConstraints(maxWidth: 32, maxHeight: 32),
-                                padding: EdgeInsets.zero,
-                                onPressed: null,
-                              ),
-                            );
-                          },
-                        ),
+                                  );
+                                },
+                                loading: () => const SizedBox(width: 32, height: 32),
+                                error: (err, stack) => IconButton(
+                                  icon: const Icon(Icons.error_outline, size: 20, color: Colors.red),
+                                  tooltip: '加载模型失败',
+                                  constraints: const BoxConstraints(maxWidth: 32, maxHeight: 32),
+                                  padding: EdgeInsets.zero,
+                                  onPressed: null,
+                                ),
+                              );
+                            },
+                          ),
+                        ],
                       ),
                       suffixIcon: ValueListenableBuilder<TextEditingValue>(
                         valueListenable: _promptController,
