@@ -7,6 +7,7 @@ import 'package:forui/forui.dart';
 import 'package:pro_image_editor/pro_image_editor.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 import '../services/llm_provider.dart';
 import '../services/image_provider.dart';
 import '../services/session_provider.dart';
@@ -14,10 +15,30 @@ import 'package:flutter/services.dart' as services;
 
 class ImageMessage {
   final String prompt;
-  Uint8List image;
+  final Uint8List image;
+  final String? aiDescription;
   final DateTime timestamp;
 
-  ImageMessage(this.prompt, this.image, [DateTime? timestamp]) : timestamp = timestamp ?? DateTime.now();
+  ImageMessage(this.prompt, this.image, this.aiDescription, [DateTime? timestamp]) : timestamp = timestamp ?? DateTime.now();
+
+  factory ImageMessage.fromJson(Map<String, dynamic> json) {
+    final prompt = json['prompt'] as String;
+    final imageBase64 = json['imageBase64'] as String;
+    final image = base64Decode(imageBase64) as Uint8List;
+    final aiDescription = json['aiDescription'] as String?;
+    final timestampStr = json['timestamp'] as String;
+    final timestamp = DateTime.parse(timestampStr);
+    return ImageMessage(prompt, image, aiDescription, timestamp);
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'prompt': prompt,
+      'imageBase64': base64Encode(image),
+      'aiDescription': aiDescription,
+      'timestamp': timestamp.toIso8601String(),
+    };
+  }
 }
 
 class ImagePage extends ConsumerStatefulWidget {
@@ -83,10 +104,44 @@ class _ImagePageState extends ConsumerState<ImagePage> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    _loadHistory();
+  }
+
+  @override
   void dispose() {
+    _saveHistory();
     _promptController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadHistory() async {
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File('${dir.path}/image_history.json');
+      if (await file.exists()) {
+        final jsonStr = await file.readAsString();
+        final List<dynamic> list = json.decode(jsonStr);
+        setState(() {
+          _history = list.map((j) => ImageMessage.fromJson(j)).toList();
+        });
+      }
+    } catch (e) {
+      debugPrint('Load image history error: $e');
+    }
+  }
+
+  Future<void> _saveHistory() async {
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File('${dir.path}/image_history.json');
+      final List<Map<String, dynamic>> list = _history.map((m) => m.toJson()).toList();
+      await file.writeAsString(json.encode(list));
+    } catch (e) {
+      debugPrint('Save image history error: $e');
+    }
   }
 
   void _scrollToBottom() {
@@ -117,12 +172,13 @@ class _ImagePageState extends ConsumerState<ImagePage> {
       final result = await generator.generateImage(prompt, base64Image: base64Image, mimeType: mimeType);
       if (result.imageBytes != null) {
         final messagePrompt = _history.isNotEmpty ? '编辑：$prompt' : prompt;
-        final message = ImageMessage(messagePrompt, result.imageBytes!);
+        final message = ImageMessage(messagePrompt, result.imageBytes!, result.description);
         setState(() {
           _history.add(message);
         });
         _promptController.clear();
         _scrollToBottom();
+        _saveHistory();
       }
     } catch (e) {
       final errorMsg = e.toString();
@@ -172,7 +228,7 @@ class _ImagePageState extends ConsumerState<ImagePage> {
       if (file.bytes != null) {
         final bytes = file.bytes!;
         final name = file.name.isNotEmpty ? file.name : 'image.${file.extension ?? 'jpg'}';
-        final message = ImageMessage('上传：$name', bytes);
+        final message = ImageMessage('上传：$name', bytes, null);
         setState(() {
           _history.add(message);
           _promptController.clear();
@@ -193,7 +249,7 @@ class _ImagePageState extends ConsumerState<ImagePage> {
             onImageEditingComplete: (Uint8List newBytes) async {
               Navigator.pop(context);
               final editedPrompt = '${_history[index].prompt} (编辑)';
-              final editedMessage = ImageMessage(editedPrompt, newBytes, DateTime.now());
+              final editedMessage = ImageMessage(editedPrompt, newBytes, null, DateTime.now());
               setState(() {
                 _history.add(editedMessage);
               });
@@ -262,60 +318,117 @@ class _ImagePageState extends ConsumerState<ImagePage> {
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
                         child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
                             Padding(
                               padding: const EdgeInsets.only(bottom: 4),
                               child: Text(
                                 timeStr,
+                                textAlign: TextAlign.center,
                                 style: TextStyle(
                                   fontSize: 11,
                                   color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                                 ),
                               ),
                             ),
-                            Container(
-                              constraints: BoxConstraints(
-                                maxWidth: MediaQuery.of(context).size.width * 0.8,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Theme.of(context).colorScheme.secondaryContainer,
-                                borderRadius: BorderRadius.circular(18),
-                              ),
-                              child: Column(
-                                children: [
-                                  Padding(
-                                    padding: const EdgeInsets.all(12),
-                                    child: ClipRRect(
-                                      borderRadius: BorderRadius.circular(12),
-                                      child: Image.memory(
-                                        msg.image,
-                                        height: 240,
-                                        fit: BoxFit.cover,
-                                      ),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: Container(
+                                constraints: BoxConstraints(
+                                  maxWidth: MediaQuery.of(context).size.width * 0.75,
+                                ),
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.primaryContainer,
+                                  borderRadius: BorderRadius.circular(18),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.04),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                  child: Text(
+                                    msg.prompt,
+                                    style: TextStyle(
+                                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                                      fontSize: 14,
+                                      height: 1.5,
                                     ),
                                   ),
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      IconButton(
-                                        icon: const Icon(Icons.edit, size: 18),
-                                        onPressed: () => _editImage(reversedIndex),
-                                        tooltip: '编辑',
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Container(
+                                constraints: BoxConstraints(
+                                  maxWidth: MediaQuery.of(context).size.width * 0.75,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.secondaryContainer,
+                                  borderRadius: BorderRadius.circular(18),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.04),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: Column(
+                                  children: [
+                                    Padding(
+                                      padding: const EdgeInsets.all(12),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(12),
+                                        child: Image.memory(
+                                          msg.image,
+                                          height: 240,
+                                          fit: BoxFit.cover,
+                                        ),
                                       ),
-                                      IconButton(
-                                        icon: const Icon(Icons.download, size: 18),
-                                        onPressed: () => _downloadImage(reversedIndex),
-                                        tooltip: '下载',
+                                    ),
+                                    if (msg.aiDescription != null && msg.aiDescription!.isNotEmpty)
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                        child: Text(
+                                          msg.aiDescription!,
+                                          style: TextStyle(
+                                            color: Theme.of(context).colorScheme.onSecondaryContainer,
+                                            fontSize: 14,
+                                            height: 1.5,
+                                          ),
+                                        ),
                                       ),
-                                      IconButton(
-                                        icon: const Icon(Icons.delete_outline, size: 18),
-                                        onPressed: () => _deleteImage(reversedIndex),
-                                        tooltip: '删除',
+                                    Padding(
+                                      padding: const EdgeInsets.only(bottom: 8, left: 12, right: 12),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          IconButton(
+                                            icon: const Icon(Icons.edit, size: 18),
+                                            onPressed: () => _editImage(reversedIndex),
+                                            tooltip: '编辑',
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(Icons.download, size: 18),
+                                            onPressed: () => _downloadImage(reversedIndex),
+                                            tooltip: '下载',
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(Icons.delete_outline, size: 18),
+                                            onPressed: () => _deleteImage(reversedIndex),
+                                            tooltip: '删除',
+                                          ),
+                                        ],
                                       ),
-                                    ],
-                                  ),
-                                ],
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ],
@@ -328,6 +441,18 @@ class _ImagePageState extends ConsumerState<ImagePage> {
             padding: const EdgeInsets.only(left: 12, right: 12, bottom: 12),
             child: Row(
               children: [
+                IconButton(
+                  icon: const Icon(Icons.upload_file),
+                  tooltip: '上传图像',
+                  constraints: const BoxConstraints(maxWidth: 32, maxHeight: 32),
+                  padding: EdgeInsets.zero,
+                  style: IconButton.styleFrom(
+                    shape: const CircleBorder(),
+                    hoverColor: Theme.of(context).colorScheme.primary.withOpacity(0.08),
+                  ),
+                  onPressed: _uploadImage,
+                ),
+                const SizedBox(width: 8),
                 Expanded(
                   child: TextField(
                     controller: _promptController,
