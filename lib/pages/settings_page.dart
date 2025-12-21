@@ -186,6 +186,7 @@ class LLMSettings extends ConsumerWidget {
     final keyController = TextEditingController(text: existingConfig?.apiKey);
     final extraBodyController = TextEditingController(text: existingConfig?.extraBodyJson ?? '');
     final temperatureController = TextEditingController(text: existingConfig?.temperature?.toString() ?? '');
+    bool supportsVisionLocal = existingConfig?.supportsVision ?? false;
     
     // Track original name to handle renames
     final originalName = existingConfig?.name;
@@ -194,30 +195,45 @@ class LLMSettings extends ConsumerWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(existingConfig == null ? '添加模型' : '编辑模型'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              FTextField(controller: nameController, hint: '显示名称 (Name)'),
-              const SizedBox(height: 8),
-              FTextField(controller: modelController, hint: '模型ID (Model ID)'),
-              const SizedBox(height: 8),
-              FTextField(controller: urlController, hint: 'Base URL (e.g. https://api.openai.com/v1)'),
-              const SizedBox(height: 8),
-              FTextField(controller: keyController, hint: 'API Key', obscureText: true),
-              const SizedBox(height: 8),
-              FTextField(
-                controller: extraBodyController,
-                hint: 'Extra Body JSON (例如 {"reasoning": {"enabled": true}})',
-                maxLines: 3,
-              ),
-              const SizedBox(height: 8),
-              FTextField(
-                controller: temperatureController,
-                hint: 'Temperature (0.0-2.0)',
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              ),
-            ],
+        content: StatefulBuilder(
+          builder: (context, setDialogState) => SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FTextField(controller: nameController, hint: '显示名称 (Name)'),
+                const SizedBox(height: 8),
+                FTextField(controller: modelController, hint: '模型ID (Model ID)'),
+                const SizedBox(height: 8),
+                FTextField(controller: urlController, hint: 'Base URL (e.g. https://api.openai.com/v1)'),
+                const SizedBox(height: 8),
+                FTextField(controller: keyController, hint: 'API Key', obscureText: true),
+                const SizedBox(height: 8),
+                FTextField(
+                  controller: extraBodyController,
+                  hint: 'Extra Body JSON (例如 {"reasoning": {"enabled": true}})',
+                  maxLines: 3,
+                ),
+                const SizedBox(height: 8),
+                FTextField(
+                  controller: temperatureController,
+                  hint: 'Temperature (0.0-2.0)',
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                ),
+                const SizedBox(height: 8),
+                SwitchListTile(
+                  title: const Text('支持图片识别'),
+                  subtitle: const Text('启用视觉模型 (VL) 支持图片输入'),
+                  value: supportsVisionLocal,
+                  onChanged: (value) {
+                    setDialogState(() {
+                      supportsVisionLocal = value;
+                    });
+                  },
+                  dense: true,
+                  visualDensity: VisualDensity.compact,
+                ),
+              ],
+            ),
           ),
         ),
         actions: [
@@ -259,6 +275,7 @@ class LLMSettings extends ConsumerWidget {
                       apiKey: keyController.text,
                       extraBodyJson: extraBodyJson,
                       temperature: temperature,
+                      supportsVision: supportsVisionLocal,
                     );
 
                     // If editing and name changed, remove old one first
@@ -482,6 +499,16 @@ class LLMSettings extends ConsumerWidget {
                                       value: config.isEnabled,
                                       onChanged: (value) {
                                         ref.read(configProvider.notifier).toggleModel(config.name);
+                                      },
+                                      visualDensity: VisualDensity.compact,
+                                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                      side: BorderSide.none,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Checkbox(
+                                      value: config.supportsVision,
+                                      onChanged: (value) {
+                                        ref.read(configProvider.notifier).toggleSupportsVision(config.name);
                                       },
                                       visualDensity: VisualDensity.compact,
                                       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,

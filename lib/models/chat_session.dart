@@ -7,6 +7,7 @@ class Message {
   final String text;
   final DateTime timestamp;
   final String? sender;
+  final List<Map<String, dynamic>>? contentParts;
   final bool isSystem;
 
   Message({
@@ -15,6 +16,7 @@ class Message {
     required this.text,
     DateTime? timestamp,
     this.sender,
+    this.contentParts,
     this.isSystem = false,
   })  : id = id ?? const Uuid().v4(),
         timestamp = timestamp ?? DateTime.now();
@@ -26,6 +28,7 @@ class Message {
       text: json['text'] as String,
       timestamp: DateTime.parse(json['timestamp'] as String),
       sender: json['sender'] as String?,
+      contentParts: (json['contentParts'] as List?)?.cast<Map<String, dynamic>>(),
       isSystem: (json['isSystem'] as bool?) ?? false,
     );
   }
@@ -37,6 +40,7 @@ class Message {
       'text': text,
       'timestamp': timestamp.toIso8601String(),
       'sender': sender,
+      if (contentParts != null) 'contentParts': contentParts!,
       'isSystem': isSystem,
     };
   }

@@ -6,7 +6,7 @@ import '../models/chat_session.dart';
 import 'llm_storage_service.dart';
 
 abstract class LLMProvider {
-  Stream<String> generateStream(List<Message> history, String prompt, {String? systemPrompt});
+  Stream<String> generateStream(List<Message> history, String prompt, {List<Map<String, dynamic>>? userContentParts, String? systemPrompt});
 }
 
 class LLMConfig {
@@ -17,6 +17,7 @@ class LLMConfig {
   final bool isEnabled;
   final String? extraBodyJson;
   final double? temperature;
+  final bool supportsVision;
   const LLMConfig({
     required this.name,
     required this.apiKey,
@@ -25,6 +26,7 @@ class LLMConfig {
     this.isEnabled = true,
     this.extraBodyJson,
     this.temperature,
+    this.supportsVision = false,
   });
 
   factory LLMConfig.fromJson(Map<String, dynamic> json) {
@@ -36,6 +38,7 @@ class LLMConfig {
       isEnabled: json['isEnabled'] as bool? ?? true,
       extraBodyJson: json['extraBodyJson'] as String?,
       temperature: (json['temperature'] as num?)?.toDouble(),
+      supportsVision: json['supportsVision'] as bool? ?? false,
     );
   }
 
@@ -48,6 +51,7 @@ class LLMConfig {
       'isEnabled': isEnabled,
       if (extraBodyJson != null) 'extraBodyJson': extraBodyJson,
       if (temperature != null) 'temperature': temperature,
+      'supportsVision': supportsVision,
     };
   }
 
@@ -59,6 +63,7 @@ class LLMConfig {
     bool? isEnabled,
     String? extraBodyJson,
     double? temperature,
+    bool? supportsVision,
   }) {
     return LLMConfig(
       name: name ?? this.name,
@@ -68,6 +73,7 @@ class LLMConfig {
       isEnabled: isEnabled ?? this.isEnabled,
       extraBodyJson: extraBodyJson ?? this.extraBodyJson,
       temperature: temperature ?? this.temperature,
+      supportsVision: supportsVision ?? this.supportsVision,
     );
   }
 }
@@ -159,6 +165,18 @@ class ConfigNotifier extends AsyncNotifier<Map<String, LLMConfig>> {
     await _save(newConfigs);
   }
 
+  Future<void> toggleSupportsVision(String name) async {
+    final current = state.valueOrNull ?? {};
+    if (!current.containsKey(name)) return;
+    
+    final newConfigs = Map<String, LLMConfig>.from(current);
+    final config = newConfigs[name]!;
+    newConfigs[name] = config.copyWith(supportsVision: !config.supportsVision);
+    
+    state = AsyncValue.data(newConfigs);
+    await _save(newConfigs);
+  }
+
   /// Export current configurations to JSON format compatible with assets/config/llm.json
   Map<String, dynamic> exportToJson() {
     final current = state.valueOrNull ?? {};
@@ -205,10 +223,6 @@ class ConfigNotifier extends AsyncNotifier<Map<String, LLMConfig>> {
 
 final configProvider = AsyncNotifierProvider<ConfigNotifier, Map<String, LLMConfig>>(ConfigNotifier.new);
 
-// Use a simple StateProvider, but we might want to listen to changes 
-// and save them? 
-// For now, let's keep it simple. The ConfigNotifier will handle saving when models change.
-// When currentModel changes, we should probably save that too?
 final currentModelProvider = StateProvider<String>((ref) => 'deepseek-chat');
 
 final llmProvider = FutureProvider<LLMProvider>((ref) async {
@@ -218,14 +232,11 @@ final llmProvider = FutureProvider<LLMProvider>((ref) async {
   final configs = await ref.watch(configProvider.future);
   print('llmProvider: configs loaded, ${configs.length} entries');
   
-  // Safety check: ensure currentModel exists in configs
   var config = configs[currentModel];
   
   if (config == null) {
     if (configs.isNotEmpty) {
-      // Fallback to first available model if current is invalid
       config = configs.values.first;
-      // Ideally update the state too so UI is consistent
       Future.microtask(() => ref.read(currentModelProvider.notifier).state = config!.name);
     } else {
       throw Exception('未找到任何模型配置，请检查设置');
@@ -263,7 +274,6 @@ class CustomOpenAILLMProvider implements LLMProvider {
             print('LLMProvider: SSE decode error: $e. Line: $line');
           }
         } else if (!line.startsWith(':')) {
-          // OpenAI spec says to ignore everything else, but logging helps debug
           if (line.contains('"content"')) {
             print('LLMProvider: Suspicious non-data line: $line');
           }
@@ -290,22 +300,22 @@ class CustomOpenAILLMProvider implements LLMProvider {
       return '$uri/chat/completions';
     }
     
-    // Default assumption: if neither, append /v1/chat/completions
-    // This allows inputting "https://api.example.com" -> "https://api.example.com/v1/chat/completions"
     return '$uri/v1/chat/completions';
   }
 
   @override
-  Stream<String> generateStream(List<Message> history, String prompt, {String? systemPrompt}) async* {
-    final messages = [
-      if (systemPrompt != null && systemPrompt.isNotEmpty)
-        {'role': 'system', 'content': systemPrompt},
-      ...history.map((m) => <String, dynamic>{
-        'role': m.isUser ? 'user' : 'assistant',
-        'content': m.text,
-      }),
-      {'role': 'user', 'content': prompt},
-    ];
+  Stream<String> generateStream(List<Message> history, String prompt, {List<Map<String, dynamic>>? userContentParts, String? systemPrompt}) async* {
+    List<dynamic> messages = [];
+    if (systemPrompt != null && systemPrompt.isNotEmpty) {
+      messages.add({'role': 'system', 'content': systemPrompt});
+    }
+    for (final m in history) {
+      final role = m.isUser ? 'user' : 'assistant';
+      dynamic content = m.contentParts ?? m.text;
+      messages.add({'role': role, 'content': content});
+    }
+    dynamic userContent = userContentParts ?? prompt;
+    messages.add({'role': 'user', 'content': userContent});
 
     final requestBody = {
       'model': config.model,

@@ -25,7 +25,7 @@ environment:
 # To automatically upgrade your package dependencies to the latest versions
 # consider running `flutter pub upgrade --major-versions`. Alternatively,
 # dependencies can be manually updated by changing the version numbers below to
-# the latest version available on pub.dev. To see which dependencies have newer
+# the latest version available on pub.dev. To see which versions have newer
 # versions available, run `flutter pub outdated`.
 dependencies:
   flutter:
@@ -45,6 +45,8 @@ dependencies:
   hive_flutter: ^1.1.0
   uuid: ^4.5.1
   share_plus: ^10.1.4
+  image: ^4.2.0
+  flutter_image_compress: ^2.3.0
   file_picker: ^8.1.7
   markdown_widget: ^2.3.2+8
 

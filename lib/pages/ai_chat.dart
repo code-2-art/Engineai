@@ -9,8 +9,11 @@ import '../services/session_provider.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'dart:typed_data';
+import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'settings_page.dart';
 import '../models/system_prompt.dart';
@@ -29,6 +32,7 @@ class _AiChatState extends ConsumerState<AiChat> {
   final ScrollController _scrollController = ScrollController();
   bool _isSending = false;
   StreamSubscription<String>? _responseSubscription;
+  String? _imageBase64;
 
   @override
   void dispose() {
@@ -92,6 +96,26 @@ class _AiChatState extends ConsumerState<AiChat> {
     }
   }
 
+  Future<void> _pickImage() async {
+    final result = await FilePicker.platform.pickFiles(type: FileType.image);
+    if (result != null && result.files.isNotEmpty) {
+      final file = result.files.first;
+      final path = file.path;
+      if (path != null) {
+        final bytes = await FlutterImageCompress.compressWithFile(
+          path,
+          minWidth: 1024,
+          quality: 90,
+          format: CompressFormat.png,
+        );
+        if (bytes != null) {
+          _imageBase64 = base64Encode(bytes);
+          if (mounted) setState(() {});
+        }
+      }
+    }
+  }
+
   Future<void> _sendMessage() async {
     final prompt = _controller.text.trim();
     if (prompt.isEmpty || _isSending) return;
@@ -112,7 +136,22 @@ class _AiChatState extends ConsumerState<AiChat> {
       final currentSession = ref.read(sessionListProvider).firstWhere((s) => s.id == sessionId);
       
       final currentModel = ref.read(currentModelProvider);
-      final userMessage = Message(isUser: true, text: prompt, sender: '我');
+      final configs = await ref.read(configProvider.future);
+      final config = configs[currentModel];
+      final bool supportsVision = config?.supportsVision ?? false;
+      List<Map<String, dynamic>>? userContentParts;
+      if (supportsVision && _imageBase64 != null) {
+        userContentParts = [
+          {"type": "text", "text": prompt},
+          {
+            "type": "image_url",
+            "image_url": {
+              "url": "data:image/png;base64,$_imageBase64"
+            }
+          }
+        ];
+      }
+      final userMessage = Message(isUser: true, text: prompt, sender: '我', contentParts: userContentParts);
       final updatedMessages = [...currentSession.messages, userMessage];
       
       String title = currentSession.title;
@@ -128,6 +167,7 @@ class _AiChatState extends ConsumerState<AiChat> {
       );
 
       _controller.clear();
+      _imageBase64 = null;
       _scrollToBottom();
 
       ref.read(currentResponseProvider.notifier).state = '';
@@ -151,7 +191,7 @@ class _AiChatState extends ConsumerState<AiChat> {
           : fullHistory.sublist(lastClearIndex + 1);
 
       print('AiChat: Starting stream with ${effectiveHistory.length} messages in history...');
-      final stream = llm.generateStream(effectiveHistory, prompt, systemPrompt: currentSession.systemPrompt);
+      final stream = llm.generateStream(effectiveHistory, prompt, userContentParts: userContentParts, systemPrompt: currentSession.systemPrompt);
 
       _responseSubscription?.cancel();
       _responseSubscription = stream.listen(
@@ -200,10 +240,8 @@ class _AiChatState extends ConsumerState<AiChat> {
     final md = ref.read(chatHistoryServiceProvider).convertToMarkdown(session);
     
     if (kIsWeb || !Platform.isMacOS) {
-      // Fallback to share for web or other mobile/non-desktop platforms
       await Share.share(md, subject: '${session.title}.md');
     } else {
-      // Direct save for Desktop
       String? outputFile = await FilePicker.platform.saveFile(
         dialogTitle: '请选择保存位置',
         fileName: '${session.title}.md',
@@ -213,7 +251,6 @@ class _AiChatState extends ConsumerState<AiChat> {
       if (outputFile != null) {
         final file = File(outputFile);
         await file.writeAsString(md);
-        // Using a basic feedback mechanism
         if (mounted) {
           showDialog(
             context: context,
@@ -233,6 +270,38 @@ class _AiChatState extends ConsumerState<AiChat> {
     }
   }
 
+  String _getDisplayText(Message message) {
+    if (message.contentParts != null) {
+      final texts = message.contentParts!.where((p) => p['type'] == 'text').map((p) => p['text'] as String);
+      return texts.join('\n');
+    }
+    return message.text;
+  }
+
+  Widget _buildImagePreview(Message message) {
+    if (message.contentParts == null || !message.isUser) return const SizedBox.shrink();
+    for (final part in message.contentParts!) {
+      if (part['type'] == 'image_url') {
+        final url = part['image_url']['url'] as String?;
+        if (url != null && url.startsWith('data:image')) {
+          final base64Str = url.split(',')[1];
+          final bytes = base64Decode(base64Str);
+          return Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.memory(
+                bytes,
+                height: 200,
+                fit: BoxFit.cover,
+              ),
+            ),
+          );
+        }
+      }
+    }
+    return const SizedBox.shrink();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -315,6 +384,7 @@ class _AiChatState extends ConsumerState<AiChat> {
                           );
                         }
                         final timeStr = "${message.timestamp.year}-${message.timestamp.month.toString().padLeft(2, '0')}-${message.timestamp.day.toString().padLeft(2, '0')} ${message.timestamp.hour.toString().padLeft(2, '0')}:${message.timestamp.minute.toString().padLeft(2, '0')}";
+                        final displayText = _getDisplayText(message);
                         return Padding(
                           padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
                           child: Column(
@@ -356,7 +426,7 @@ class _AiChatState extends ConsumerState<AiChat> {
                                         ),
                                         child: SelectionArea(
                                           child: MarkdownBody(
-                                            data: message.text.replaceAllMapped(
+                                            data: displayText.replaceAllMapped(
                                               RegExp(r'^-{3,}\s*$', multiLine: true),
                                               (match) => '\n\n${match.group(0)!}\n\n',
                                             ),
@@ -398,6 +468,7 @@ class _AiChatState extends ConsumerState<AiChat> {
                                           ),
                                         ),
                                       ),
+                                      _buildImagePreview(message),
                                       const SizedBox(height: 4),
                                       Row(
                                         mainAxisSize: MainAxisSize.min,
@@ -407,7 +478,7 @@ class _AiChatState extends ConsumerState<AiChat> {
                                             padding: EdgeInsets.zero,
                                             constraints: const BoxConstraints(),
                                             onPressed: () {
-                                              Clipboard.setData(ClipboardData(text: message.text));
+                                              Clipboard.setData(ClipboardData(text: displayText));
                                               ScaffoldMessenger.of(context).showSnackBar(
                                                 const SnackBar(content: Text('已复制到剪贴板'), behavior: SnackBarBehavior.floating, width: 200),
                                               );
@@ -531,14 +602,53 @@ class _AiChatState extends ConsumerState<AiChat> {
                   ),
           ),
           Padding(
-            padding: EdgeInsets.all(12),
-            child: Row(
+            padding: const EdgeInsets.only(left: 12, right: 12, bottom: 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(
-                  child: TextField(
-                    controller: _controller,
-                    enabled: !_isSending,
-                    decoration: InputDecoration(
+                if (_imageBase64 != null)
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Stack(
+                      children: [
+                        Image.memory(
+                          base64Decode(_imageBase64!),
+                          height: 200,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                        ),
+                        Positioned(
+                          top: 4,
+                          right: 4,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.surface,
+                              shape: BoxShape.circle,
+                            ),
+                            child: IconButton(
+                              icon: const Icon(Icons.close, size: 18),
+                              padding: const EdgeInsets.all(4),
+                              constraints: const BoxConstraints(),
+                              onPressed: () {
+                                _imageBase64 = null;
+                                setState(() {});
+                              },
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                if (_imageBase64 != null)
+                  const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _controller,
+                        enabled: !_isSending,
+                        decoration: InputDecoration(
                       hintText: _isSending ? 'AI 正在回复...' : '输入消息...',
                       prefixIcon: Padding(
                         padding: const EdgeInsets.only(left: 8),
@@ -697,7 +807,7 @@ class _AiChatState extends ConsumerState<AiChat> {
                                             ...names.map((name) => FItem(title: Text(name), suffix: currentModel == name ? Icon(Icons.check, size: 16, color: Theme.of(context).colorScheme.primary) : null, onPress: () {
                                               ref.read(configProvider.notifier).updateDefaultModel(name);
                                             },
-                                          )),
+                                            )),
                                             FItem(
                                               prefix: const Icon(Icons.model_training),
                                               title: const Text('管理模型'),
@@ -737,6 +847,37 @@ class _AiChatState extends ConsumerState<AiChat> {
                                 );
                               },
                             ),
+                            const SizedBox(width: 8),
+                            Consumer(
+                              builder: (context, ref, child) {
+                                final configsAsync = ref.watch(configProvider);
+                                final currentModel = ref.watch(currentModelProvider);
+                                return configsAsync.when(
+                                  data: (configs) {
+                                    final supportsVision = configs[currentModel]?.supportsVision ?? false;
+                                    if (supportsVision && !_isSending) {
+                                      return IconButton(
+                                        icon: _imageBase64 != null
+                                            ? Icon(Icons.image, size: 14, color: Theme.of(context).colorScheme.primary)
+                                            : const Icon(Icons.add_photo_alternate_outlined, size: 14),
+                                        tooltip: '上传图片',
+                                        constraints: const BoxConstraints(maxWidth: 32, maxHeight: 32),
+                                        padding: EdgeInsets.zero,
+                                        style: IconButton.styleFrom(
+                                          shape: const CircleBorder(),
+                                          hoverColor: Theme.of(context).colorScheme.primary.withOpacity(0.08),
+                                        ),
+                                        onPressed: _pickImage,
+                                      );
+                                    } else {
+                                      return const SizedBox.shrink();
+                                    }
+                                  },
+                                  loading: () => const SizedBox(width: 32, height: 32),
+                                  error: (err, stack) => const SizedBox.shrink(),
+                                );
+                              },
+                            ),
                           ],
                         ),
                       ),
@@ -763,7 +904,7 @@ class _AiChatState extends ConsumerState<AiChat> {
                     onSubmitted: (_) => _sendMessage(),
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 12),
                 IconButton(
                   onPressed: _isSending ? _stopGenerating : _sendMessage,
                   icon: Icon(
@@ -779,9 +920,11 @@ class _AiChatState extends ConsumerState<AiChat> {
                 ),
               ],
             ),
-          ),
         ],
       ),
-    );
+    ),
+  ],
+),
+);
   }
 }
