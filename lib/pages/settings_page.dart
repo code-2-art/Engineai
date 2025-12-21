@@ -187,6 +187,7 @@ class LLMSettings extends ConsumerWidget {
     final extraBodyController = TextEditingController(text: existingConfig?.extraBodyJson ?? '');
     final temperatureController = TextEditingController(text: existingConfig?.temperature?.toString() ?? '');
     bool supportsVisionLocal = existingConfig?.supportsVision ?? false;
+    bool supportsImageGenLocal = existingConfig?.supportsImageGen ?? false;
     
     // Track original name to handle renames
     final originalName = existingConfig?.name;
@@ -227,6 +228,18 @@ class LLMSettings extends ConsumerWidget {
                   onChanged: (value) {
                     setDialogState(() {
                       supportsVisionLocal = value;
+                    });
+                  },
+                  dense: true,
+                  visualDensity: VisualDensity.compact,
+                ),
+                SwitchListTile(
+                  title: const Text('支持图像生成'),
+                  subtitle: const Text('启用图像生成模型'),
+                  value: supportsImageGenLocal,
+                  onChanged: (value) {
+                    setDialogState(() {
+                      supportsImageGenLocal = value;
                     });
                   },
                   dense: true,
@@ -276,6 +289,7 @@ class LLMSettings extends ConsumerWidget {
                       extraBodyJson: extraBodyJson,
                       temperature: temperature,
                       supportsVision: supportsVisionLocal,
+                      supportsImageGen: supportsImageGenLocal,
                     );
 
                     // If editing and name changed, remove old one first
@@ -509,6 +523,16 @@ class LLMSettings extends ConsumerWidget {
                                       value: config.supportsVision,
                                       onChanged: (value) {
                                         ref.read(configProvider.notifier).toggleSupportsVision(config.name);
+                                      },
+                                      visualDensity: VisualDensity.compact,
+                                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                      side: BorderSide.none,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Checkbox(
+                                      value: config.supportsImageGen,
+                                      onChanged: (value) {
+                                        ref.read(configProvider.notifier).toggleSupportsImageGen(config.name);
                                       },
                                       visualDensity: VisualDensity.compact,
                                       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,

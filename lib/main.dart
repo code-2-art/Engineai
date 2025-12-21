@@ -5,6 +5,7 @@ import 'package:forui/forui.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'pages/ai_chat.dart';
 import 'pages/settings_page.dart';
+import 'pages/image_page.dart';
 import 'services/llm_provider.dart';
 import 'services/session_provider.dart';
 import 'models/chat_session.dart';
@@ -98,9 +99,17 @@ class Application extends ConsumerWidget {
                             padding: EdgeInsets.zero,
                             child: IconButton(
                               icon: const Icon(Icons.chat_bubble_outline, size: 18),
-                              onPressed: () async {
-                                final session = await ref.read(sessionListProvider.notifier).createNewSession();
-                                ref.read(currentSessionIdProvider.notifier).setSessionId(session.id);
+                              onPressed: () {
+                                ref.read(currentPageProvider.notifier).state = 'chat';
+                              },
+                            ),
+                          ),
+                          Padding(
+                            padding: EdgeInsets.zero,
+                            child: IconButton(
+                              icon: const Icon(Icons.image_outlined, size: 18),
+                              onPressed: () {
+                                ref.read(currentPageProvider.notifier).state = 'image';
                               },
                             ),
                           ),
@@ -125,13 +134,25 @@ class Application extends ConsumerWidget {
                     // 中间聊天区域
                     const FDivider(axis: Axis.vertical),
                     Expanded(
-                      child: GestureDetector(
-                        onTap: () {
-                          if (!rightCollapsed) {
-                            ref.read(rightSidebarCollapsedProvider.notifier).state = true;
+                      child: Consumer(
+                        builder: (context, ref, child) {
+                          final page = ref.watch(currentPageProvider);
+                          final rightCollapsed = ref.watch(rightSidebarCollapsedProvider);
+                          Widget pageWidget = const SizedBox.shrink();
+                          if (page == 'chat') {
+                            pageWidget = const AiChat();
+                          } else if (page == 'image') {
+                            pageWidget = const ImagePage();
                           }
+                          return GestureDetector(
+                            onTap: () {
+                              if (!rightCollapsed) {
+                                ref.read(rightSidebarCollapsedProvider.notifier).state = true;
+                              }
+                            },
+                            child: pageWidget,
+                          );
                         },
-                        child: const AiChat(),
                       ),
                     ),
                   ],

@@ -118,3 +118,5 @@ final currentSessionProvider = Provider<ChatSession?>((ref) {
   final sessions = ref.watch(sessionListProvider);
   return sessions.firstWhere((s) => s.id == id, orElse: () => throw Exception('Session not found'));
 });
+
+final currentPageProvider = StateProvider<String>((ref) => 'chat');

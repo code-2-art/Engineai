@@ -18,6 +18,7 @@ class LLMConfig {
   final String? extraBodyJson;
   final double? temperature;
   final bool supportsVision;
+  final bool supportsImageGen;
   const LLMConfig({
     required this.name,
     required this.apiKey,
@@ -27,6 +28,7 @@ class LLMConfig {
     this.extraBodyJson,
     this.temperature,
     this.supportsVision = false,
+    this.supportsImageGen = false,
   });
 
   factory LLMConfig.fromJson(Map<String, dynamic> json) {
@@ -38,6 +40,7 @@ class LLMConfig {
       isEnabled: json['isEnabled'] as bool? ?? true,
       extraBodyJson: json['extraBodyJson'] as String?,
       temperature: (json['temperature'] as num?)?.toDouble(),
+      supportsImageGen: json['supportsImageGen'] as bool? ?? false,
       supportsVision: json['supportsVision'] as bool? ?? false,
     );
   }
@@ -51,6 +54,7 @@ class LLMConfig {
       'isEnabled': isEnabled,
       if (extraBodyJson != null) 'extraBodyJson': extraBodyJson,
       if (temperature != null) 'temperature': temperature,
+      'supportsImageGen': supportsImageGen,
       'supportsVision': supportsVision,
     };
   }
@@ -63,6 +67,7 @@ class LLMConfig {
     bool? isEnabled,
     String? extraBodyJson,
     double? temperature,
+    bool? supportsImageGen,
     bool? supportsVision,
   }) {
     return LLMConfig(
@@ -73,6 +78,7 @@ class LLMConfig {
       isEnabled: isEnabled ?? this.isEnabled,
       extraBodyJson: extraBodyJson ?? this.extraBodyJson,
       temperature: temperature ?? this.temperature,
+      supportsImageGen: supportsImageGen ?? this.supportsImageGen,
       supportsVision: supportsVision ?? this.supportsVision,
     );
   }
@@ -177,6 +183,18 @@ class ConfigNotifier extends AsyncNotifier<Map<String, LLMConfig>> {
     await _save(newConfigs);
   }
 
+  Future<void> toggleSupportsImageGen(String name) async {
+    final current = state.valueOrNull ?? {};
+    if (!current.containsKey(name)) return;
+    
+    final newConfigs = Map<String, LLMConfig>.from(current);
+    final config = newConfigs[name]!;
+    newConfigs[name] = config.copyWith(supportsImageGen: !config.supportsImageGen);
+    
+    state = AsyncValue.data(newConfigs);
+    await _save(newConfigs);
+  }
+
   /// Export current configurations to JSON format compatible with assets/config/llm.json
   Map<String, dynamic> exportToJson() {
     final current = state.valueOrNull ?? {};
@@ -249,6 +267,11 @@ final llmProvider = FutureProvider<LLMProvider>((ref) async {
 final modelNamesProvider = FutureProvider<List<String>>((ref) async {
   final configs = await ref.watch(configProvider.future);
   return configs.values.where((c) => c.isEnabled).map((c) => c.name).toList();
+});
+
+final imageModelNamesProvider = FutureProvider<List<String>>((ref) async {
+  final configs = await ref.watch(configProvider.future);
+  return configs.values.where((c) => c.isEnabled && c.supportsImageGen).map((c) => c.name).toList();
 });
 
 class CustomOpenAILLMProvider implements LLMProvider {

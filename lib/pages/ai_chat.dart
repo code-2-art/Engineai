@@ -323,6 +323,18 @@ class _AiChatState extends ConsumerState<AiChat> {
             child: Row(
               children: [
                 const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.chat_bubble_outline, size: 20),
+                  onPressed: () async {
+                    final session = await ref.read(sessionListProvider.notifier).createNewSession();
+                    ref.read(currentSessionIdProvider.notifier).setSessionId(session.id);
+                  },
+                  tooltip: '新对话',
+                  style: IconButton.styleFrom(
+                    backgroundColor: Colors.transparent,
+                  ),
+                ),
+                const SizedBox(width: 8),
                 Consumer(
                   builder: (context, ref, child) {
                     final collapsed = ref.watch(rightSidebarCollapsedProvider);
