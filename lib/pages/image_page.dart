@@ -6,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:forui/forui.dart';
 import 'package:pro_image_editor/pro_image_editor.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' as services;
 import '../services/llm_provider.dart';
 import '../services/image_provider.dart';
@@ -24,9 +24,8 @@ class ImagePage extends ConsumerStatefulWidget {
 
 class _ImagePageState extends ConsumerState<ImagePage> {
   final TextEditingController _promptController = TextEditingController();
-  final ScrollController _scrollController = ScrollController();
-  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-  bool _isGenerating = false;
+    final ScrollController _scrollController = ScrollController();
+    final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   Widget _buildModelSelector(BuildContext context, WidgetRef ref) {
     final namesAsync = ref.watch(imageModelNamesProvider);
@@ -80,6 +79,12 @@ class _ImagePageState extends ConsumerState<ImagePage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final sessionOpt = ref.read(currentImageSessionProvider);
+      if (sessionOpt != null && sessionOpt.messages.isNotEmpty && sessionOpt.messages.last.image.isEmpty) {
+        _performBackgroundGeneration(sessionOpt);
+      }
+    });
   }
 
   @override
@@ -101,44 +106,67 @@ class _ImagePageState extends ConsumerState<ImagePage> {
     }
   }
 
-  Future<void> _generateImage() async {
+  Future<void> _startImageGeneration() async {
     final prompt = _promptController.text.trim();
-    if (prompt.isEmpty || _isGenerating) return;
-
-    setState(() => _isGenerating = true);
-
+    final currentSessionOpt = ref.read(currentImageSessionProvider);
+    final isGenerating = currentSessionOpt != null && currentSessionOpt.messages.isNotEmpty && currentSessionOpt.messages.last.image.isEmpty;
+    if (prompt.isEmpty || isGenerating) return;
+  
+    ImageSession currentSession;
+    if (currentSessionOpt == null) {
+      final newSession = await ref.read(imageSessionListProvider.notifier).createNewSession();
+      await ref.read(currentImageSessionIdProvider.notifier).setSessionId(newSession.id);
+      currentSession = newSession;
+    } else {
+      currentSession = currentSessionOpt;
+    }
+  
+    final messagePrompt = currentSession.messages.isNotEmpty ? '编辑：$prompt' : prompt;
+    final loadingMsg = ImageMessage(messagePrompt, Uint8List(0), null);
+    final updatedWithLoading = currentSession.copyWith(messages: [...currentSession.messages, loadingMsg]);
+    await ref.read(imageSessionListProvider.notifier).updateSession(updatedWithLoading);
+    _promptController.clear();
+    _scrollToBottom();
+  
+    // Start background generation
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _performBackgroundGeneration(updatedWithLoading);
+    });
+  }
+  
+  Future<void> _performBackgroundGenerationAsync(ImageSession sessionWithLoading) async {
     try {
-      final currentSessionOpt = ref.read(currentImageSessionProvider);
-      ImageSession currentSession;
-      if (currentSessionOpt == null) {
-        final newSession = await ref.read(imageSessionListProvider.notifier).createNewSession();
-        await ref.read(currentImageSessionIdProvider.notifier).setSessionId(newSession.id);
-        currentSession = newSession;
-      } else {
-        currentSession = currentSessionOpt;
-      }
-
+      final prompt = sessionWithLoading.messages.last.prompt;
       final generator = await ref.read(imageGeneratorProvider.future);
       String? base64Image;
       String? mimeType;
-      if (currentSession.messages.isNotEmpty) {
-        final lastBytes = currentSession.messages.last.image;
-        base64Image = base64Encode(lastBytes);
+      if (sessionWithLoading.messages.length > 1) {
+        final prevMsg = sessionWithLoading.messages[sessionWithLoading.messages.length - 2];
+        base64Image = base64Encode(prevMsg.image);
         mimeType = 'image/png';
       }
       final result = await generator.generateImage(prompt, base64Image: base64Image, mimeType: mimeType);
       if (result.imageBytes != null) {
-        final messagePrompt = currentSession.messages.isNotEmpty ? '编辑：$prompt' : prompt;
-        final message = ImageMessage(messagePrompt, result.imageBytes!, result.description);
-        final updatedSession = currentSession.copyWith(messages: [...currentSession.messages, message]);
+        final realMsg = ImageMessage(prompt, result.imageBytes!, result.description);
+        final newMessages = List<ImageMessage>.from(sessionWithLoading.messages);
+        newMessages[newMessages.length - 1] = realMsg;
+        final updatedSession = sessionWithLoading.copyWith(messages: newMessages);
         await ref.read(imageSessionListProvider.notifier).updateSession(updatedSession);
-        _promptController.clear();
-        _scrollToBottom();
+        if (mounted) {
+          _scrollToBottom();
+        }
+      } else {
+        throw Exception('No image bytes returned');
       }
     } catch (e) {
-      final errorMsg = e.toString();
-      await services.Clipboard.setData(services.ClipboardData(text: errorMsg));
+      debugPrint('Background image generation error: $e');
+      // Remove the loading message on error
+      final newMessages = sessionWithLoading.messages.sublist(0, sessionWithLoading.messages.length - 1);
+      final updatedSession = sessionWithLoading.copyWith(messages: newMessages);
+      await ref.read(imageSessionListProvider.notifier).updateSession(updatedSession);
       if (mounted) {
+        final errorMsg = e.toString();
+        services.Clipboard.setData(services.ClipboardData(text: errorMsg));
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text('生成失败，错误详情已复制到剪贴板'),
@@ -151,7 +179,7 @@ class _ImagePageState extends ConsumerState<ImagePage> {
                   builder: (context) => AlertDialog(
                     title: const Text('错误详情'),
                     content: SelectableText(
-                      errorMsg,
+                      e.toString(),
                       style: const TextStyle(fontFamily: 'monospace'),
                     ),
                     actions: [
@@ -167,11 +195,11 @@ class _ImagePageState extends ConsumerState<ImagePage> {
           ),
         );
       }
-    } finally {
-      if (mounted) {
-        setState(() => _isGenerating = false);
-      }
     }
+  }
+  
+  void _performBackgroundGeneration(ImageSession sessionWithLoading) {
+    _performBackgroundGenerationAsync(sessionWithLoading);
   }
 
   Future<void> _uploadImage() async {
@@ -332,6 +360,7 @@ class _ImagePageState extends ConsumerState<ImagePage> {
     final currentSession = ref.watch(currentImageSessionProvider);
     final messages = currentSession?.messages ?? <ImageMessage>[];
     final currentTitle = currentSession?.title ?? '新图像会话';
+    final bool isGenerating = currentSession != null && currentSession.messages.isNotEmpty && currentSession.messages.last.image.isEmpty;
 
     return Scaffold(
       key: _scaffoldKey,
@@ -457,14 +486,41 @@ class _ImagePageState extends ConsumerState<ImagePage> {
                                       padding: const EdgeInsets.all(12),
                                       child: ClipRRect(
                                         borderRadius: BorderRadius.circular(12),
-                                        child: Image.memory(
-                                          msg.image,
-                                          height: 240,
-                                          fit: BoxFit.cover,
-                                        ),
+                                        child: msg.image.isEmpty
+                                            ? Container(
+                                                height: 240,
+                                                decoration: BoxDecoration(
+                                                  color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
+                                                  borderRadius: BorderRadius.circular(12),
+                                                ),
+                                                child: Center(
+                                                  child: Column(
+                                                    mainAxisAlignment: MainAxisAlignment.center,
+                                                    children: [
+                                                      SizedBox(
+                                                        width: 24,
+                                                        height: 24,
+                                                        child: CircularProgressIndicator(strokeWidth: 2),
+                                                      ),
+                                                      const SizedBox(height: 8),
+                                                      Text(
+                                                        '图像生成中...',
+                                                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              )
+                                            : Image.memory(
+                                                msg.image,
+                                                height: 240,
+                                                fit: BoxFit.cover,
+                                              ),
                                       ),
                                     ),
-                                    if (msg.aiDescription != null && msg.aiDescription!.isNotEmpty)
+                                    if (msg.aiDescription != null && msg.aiDescription!.isNotEmpty && msg.image.isNotEmpty)
                                       Padding(
                                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                                         child: Text(
@@ -476,29 +532,30 @@ class _ImagePageState extends ConsumerState<ImagePage> {
                                           ),
                                         ),
                                       ),
-                                    Padding(
-                                      padding: const EdgeInsets.only(bottom: 8, left: 12, right: 12),
-                                      child: Row(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        children: [
-                                          IconButton(
-                                            icon: const Icon(Icons.edit, size: 18),
-                                            onPressed: () => _editImage(reversedIndex),
-                                            tooltip: '编辑',
-                                          ),
-                                          IconButton(
-                                            icon: const Icon(Icons.download, size: 18),
-                                            onPressed: () => _downloadImage(reversedIndex),
-                                            tooltip: '下载',
-                                          ),
-                                          IconButton(
-                                            icon: const Icon(Icons.delete_outline, size: 18),
-                                            onPressed: () => _deleteImage(reversedIndex),
-                                            tooltip: '删除',
-                                          ),
-                                        ],
+                                    if (msg.image.isNotEmpty)
+                                      Padding(
+                                        padding: const EdgeInsets.only(bottom: 8, left: 12, right: 12),
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            IconButton(
+                                              icon: const Icon(Icons.edit, size: 18),
+                                              onPressed: () => _editImage(reversedIndex),
+                                              tooltip: '编辑',
+                                            ),
+                                            IconButton(
+                                              icon: const Icon(Icons.download, size: 18),
+                                              onPressed: () => _downloadImage(reversedIndex),
+                                              tooltip: '下载',
+                                            ),
+                                            IconButton(
+                                              icon: const Icon(Icons.delete_outline, size: 18),
+                                              onPressed: () => _deleteImage(reversedIndex),
+                                              tooltip: '删除',
+                                            ),
+                                          ],
+                                        ),
                                       ),
-                                    ),
                                   ],
                                 ),
                               ),
@@ -517,7 +574,7 @@ class _ImagePageState extends ConsumerState<ImagePage> {
                   child: TextField(
                     controller: _promptController,
                     decoration: InputDecoration(
-                      hintText: _isGenerating ? '生成中...' : (messages.isEmpty ? '描述图像，例如: \"一只可爱的猫在太空飞翔\"' : '编辑最后一张图片，例如: \"把猫的眼睛变成红色激光眼\"'),
+                      hintText: isGenerating ? '生成中...' : (messages.isEmpty ? '描述图像，例如: \"一只可爱的猫在太空飞翔\"' : '编辑最后一张图片，例如: \"把猫的眼睛变成红色激光眼\"'),
                       prefixIcon: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -593,7 +650,7 @@ class _ImagePageState extends ConsumerState<ImagePage> {
                       suffixIcon: ValueListenableBuilder<TextEditingValue>(
                         valueListenable: _promptController,
                         builder: (context, value, child) {
-                          return value.text.isNotEmpty && !_isGenerating
+                          return value.text.isNotEmpty && !isGenerating
                               ? IconButton(
                                   icon: const Icon(Icons.clear, size: 20),
                                   style: IconButton.styleFrom(
@@ -610,13 +667,13 @@ class _ImagePageState extends ConsumerState<ImagePage> {
                       ),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                     ),
-                    onSubmitted: (_) => _generateImage(),
+                    onSubmitted: (_) => _startImageGeneration(),
                   ),
                 ),
                 const SizedBox(width: 12),
                 IconButton(
-                  onPressed: _isGenerating ? null : _generateImage,
-                  icon: _isGenerating
+                  onPressed: isGenerating ? null : _startImageGeneration,
+                  icon: isGenerating
                       ? const Padding(
                           padding: EdgeInsets.all(8.0),
                           child: SizedBox(
