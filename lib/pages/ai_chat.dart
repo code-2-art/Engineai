@@ -436,50 +436,47 @@ class _AiChatState extends ConsumerState<AiChat> {
                                             ),
                                           ],
                                         ),
-                                        child: SelectionArea(
-                                          child: MarkdownBody(
-                                            data: displayText.replaceAllMapped(
-                                              RegExp(r'^-{3,}\s*$', multiLine: true),
-                                              (match) => '\n\n${match.group(0)!}\n\n',
+                                        child: MarkdownBody(
+                                          data: (displayText + '\n\n').replaceAllMapped(
+                                            RegExp(r'^-{3,}\s*$', multiLine: true),
+                                            (match) => '\n\n${match.group(0)!}\n\n',
+                                          ),
+                                          styleSheet: MarkdownStyleSheet(
+                                            p: TextStyle(
+                                              fontSize: 14,
+                                              height: 1.5,
+                                              color: message.isUser ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSecondaryContainer,
+                                              fontFamilyFallback: const ['Microsoft YaHei', 'SimSun', 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans CJK SC', 'Arial Unicode MS'],
                                             ),
-                                            inlineSyntaxes: const [],
-                                            styleSheet: MarkdownStyleSheet(
-                                              p: TextStyle(
-                                                fontSize: 14,
-                                                height: 1.5,
-                                                color: message.isUser ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSecondaryContainer,
-                                                fontFamilyFallback: const ['Microsoft YaHei', 'SimSun', 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans CJK SC', 'Arial Unicode MS'],
-                                              ),
-                                              code: TextStyle(
-                                                fontSize: 13,
-                                                height: 1.5,
-                                                color: message.isUser ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSecondaryContainer,
-                                              ),
-                                              blockquote: TextStyle(
-                                                color: message.isUser ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSecondaryContainer,
-                                                fontStyle: FontStyle.italic,
-                                              ),
-                                              blockquoteDecoration: BoxDecoration(
-                                                color: (message.isUser ? Theme.of(context).colorScheme.primaryContainer : Theme.of(context).colorScheme.secondaryContainer).withOpacity(0.3),
-                                                border: Border(
-                                                  left: BorderSide(
-                                                    color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
-                                                    width: 4,
-                                                  ),
+                                            code: TextStyle(
+                                              fontSize: 13,
+                                              height: 1.5,
+                                              color: message.isUser ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSecondaryContainer,
+                                            ),
+                                            blockquote: TextStyle(
+                                              color: message.isUser ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSecondaryContainer,
+                                              fontStyle: FontStyle.italic,
+                                            ),
+                                            blockquoteDecoration: BoxDecoration(
+                                              color: (message.isUser ? Theme.of(context).colorScheme.primaryContainer : Theme.of(context).colorScheme.secondaryContainer).withOpacity(0.3),
+                                              border: Border(
+                                                left: BorderSide(
+                                                  color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
+                                                  width: 4,
                                                 ),
                                               ),
-                                              horizontalRuleDecoration: BoxDecoration(
-                                                border: Border(
-                                                  bottom: BorderSide(
-                                                    color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
-                                                    width: 0.5,
-                                                  ),
+                                            ),
+                                            horizontalRuleDecoration: BoxDecoration(
+                                              border: Border(
+                                                bottom: BorderSide(
+                                                  color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
+                                                  width: 0.5,
                                                 ),
                                               ),
                                             ),
                                           ),
                                         ),
-                                      ),
+                                        ),
                                       _buildImagePreview(message),
                                       const SizedBox(height: 4),
                                       Row(
@@ -561,51 +558,17 @@ class _AiChatState extends ConsumerState<AiChat> {
                                       ),
                                     ],
                                   ),
-                                  child: SelectionArea(
-                                    child: MarkdownBody(
-                                      data: (currentResponse.isEmpty ? 'AI 正在思考...' : currentResponse).replaceAllMapped(
-                                        RegExp(r'^-{3,}\s*$', multiLine: true),
-                                        (match) => '\n\n${match.group(0)!}\n\n',
-                                      ),
-                                      inlineSyntaxes: const [],
-                                      styleSheet: MarkdownStyleSheet(
-                                        p: TextStyle(
-                                          fontSize: 14,
-                                          height: 1.5,
-                                          color: Theme.of(context).colorScheme.onSecondaryContainer,
-                                          fontFamilyFallback: const ['Microsoft YaHei', 'SimSun', 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans CJK SC', 'Arial Unicode MS'],
-                                        ),
-                                        code: TextStyle(
-                                          fontSize: 13,
-                                          height: 1.5,
-                                          color: Theme.of(context).colorScheme.onSecondaryContainer,
-                                        ),
-                                        blockquote: TextStyle(
-                                          color: Theme.of(context).colorScheme.onSecondaryContainer,
-                                          fontStyle: FontStyle.italic,
-                                        ),
-                                        blockquoteDecoration: BoxDecoration(
-                                          color: Theme.of(context).colorScheme.secondaryContainer.withOpacity(0.3),
-                                          border: Border(
-                                            left: BorderSide(
-                                              color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
-                                              width: 4,
-                                            ),
-                                          ),
-                                        ),
-                                        horizontalRuleDecoration: BoxDecoration(
-                                          border: Border(
-                                            bottom: BorderSide(
-                                              color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
-                                              width: 0.5,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
+                                  child: SelectableText(
+                                    currentResponse.isEmpty ? 'AI 正在思考...' : currentResponse,
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      height: 1.5,
+                                      color: Theme.of(context).colorScheme.onSecondaryContainer,
+                                      fontFamilyFallback: const ['Microsoft YaHei', 'SimSun', 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans CJK SC', 'Arial Unicode MS'],
                                     ),
                                   ),
+                                  ),
                                 ),
-                              ),
                             ],
                           ),
                         );
