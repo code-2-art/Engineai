@@ -437,42 +437,14 @@ class _AiChatState extends ConsumerState<AiChat> {
                                           ],
                                         ),
                                         child: MarkdownBody(
-                                          data: (displayText + '\n\n').replaceAllMapped(
-                                            RegExp(r'^-{3,}\s*$', multiLine: true),
-                                            (match) => '\n\n${match.group(0)!}\n\n',
-                                          ),
+                                          data: displayText,
+                                          selectable: true,
                                           styleSheet: MarkdownStyleSheet(
                                             p: TextStyle(
                                               fontSize: 14,
                                               height: 1.5,
                                               color: message.isUser ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSecondaryContainer,
                                               fontFamilyFallback: const ['Microsoft YaHei', 'SimSun', 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans CJK SC', 'Arial Unicode MS'],
-                                            ),
-                                            code: TextStyle(
-                                              fontSize: 13,
-                                              height: 1.5,
-                                              color: message.isUser ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSecondaryContainer,
-                                            ),
-                                            blockquote: TextStyle(
-                                              color: message.isUser ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSecondaryContainer,
-                                              fontStyle: FontStyle.italic,
-                                            ),
-                                            blockquoteDecoration: BoxDecoration(
-                                              color: (message.isUser ? Theme.of(context).colorScheme.primaryContainer : Theme.of(context).colorScheme.secondaryContainer).withOpacity(0.3),
-                                              border: Border(
-                                                left: BorderSide(
-                                                  color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
-                                                  width: 4,
-                                                ),
-                                              ),
-                                            ),
-                                            horizontalRuleDecoration: BoxDecoration(
-                                              border: Border(
-                                                bottom: BorderSide(
-                                                  color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
-                                                  width: 0.5,
-                                                ),
-                                              ),
                                             ),
                                           ),
                                         ),
