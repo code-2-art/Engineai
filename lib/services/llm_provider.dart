@@ -362,7 +362,7 @@ class CustomOpenAILLMProvider implements LLMProvider {
       ..headers['Content-Type'] = 'application/json'
       ..body = json.encode(requestBody);
 
-    final streamedResponse = await request.send().timeout(const Duration(seconds: 30));
+    final streamedResponse = await request.send().timeout(const Duration(seconds: 120));
 
     if (streamedResponse.statusCode != 200) {
       final errorBody = await streamedResponse.stream.bytesToString();

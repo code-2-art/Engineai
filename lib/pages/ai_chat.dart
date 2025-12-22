@@ -278,6 +278,44 @@ class _AiChatState extends ConsumerState<AiChat> {
     return message.text;
   }
 
+  void _showImageViewer(Uint8List bytes) {
+    showDialog(
+      context: context,
+      useRootNavigator: true,
+      barrierDismissible: true,
+      builder: (BuildContext dialogContext) => Dialog.fullscreen(
+        child: Scaffold(
+          backgroundColor: Colors.black,
+          appBar: AppBar(
+            title: const Text('图像查看器', style: TextStyle(color: Colors.white)),
+            backgroundColor: Colors.black54,
+            foregroundColor: Colors.white,
+            elevation: 0,
+            leading: IconButton(
+              icon: const Icon(Icons.close, color: Colors.white),
+              onPressed: () => Navigator.of(dialogContext).pop(),
+            ),
+          ),
+          body: GestureDetector(
+            onDoubleTap: () => Navigator.of(dialogContext).pop(),
+            child: Center(
+              child: InteractiveViewer(
+                panEnabled: true,
+                boundaryMargin: const EdgeInsets.all(20),
+                minScale: 0.5,
+                maxScale: 4.0,
+                child: Image.memory(
+                  bytes,
+                  fit: BoxFit.contain,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildImagePreview(Message message) {
     if (message.contentParts == null || !message.isUser) return const SizedBox.shrink();
     for (final part in message.contentParts!) {
@@ -290,10 +328,14 @@ class _AiChatState extends ConsumerState<AiChat> {
             padding: const EdgeInsets.only(top: 8),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(12),
-              child: Image.memory(
-                bytes,
-                height: 200,
-                fit: BoxFit.cover,
+              child: GestureDetector(
+                onTap: () => _showImageViewer(bytes),
+                onDoubleTap: () => _showImageViewer(bytes),
+                child: Image.memory(
+                  bytes,
+                  height: 320,
+                  fit: BoxFit.cover,
+                ),
               ),
             ),
           );
@@ -559,11 +601,15 @@ class _AiChatState extends ConsumerState<AiChat> {
                     borderRadius: BorderRadius.circular(12),
                     child: Stack(
                       children: [
-                        Image.memory(
-                          base64Decode(_imageBase64!),
-                          height: 200,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
+                        GestureDetector(
+                          onTap: () => _showImageViewer(base64Decode(_imageBase64!)),
+                          onDoubleTap: () => _showImageViewer(base64Decode(_imageBase64!)),
+                          child: Image.memory(
+                            base64Decode(_imageBase64!),
+                            height: 200,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                          ),
                         ),
                         Positioned(
                           top: 4,

@@ -286,6 +286,47 @@ class _ImagePageState extends ConsumerState<ImagePage> {
     ref.read(imageSessionListProvider.notifier).updateSession(updatedSession);
   }
 
+  void _showImageViewer(int index) {
+    final currentSession = ref.read(currentImageSessionProvider);
+    if (currentSession == null) return;
+    final bytes = currentSession.messages[index].image;
+    showDialog(
+      context: context,
+      useRootNavigator: true,
+      barrierDismissible: true,
+      builder: (BuildContext dialogContext) => Dialog.fullscreen(
+        child: Scaffold(
+          backgroundColor: Colors.black,
+          appBar: AppBar(
+            title: const Text('图像查看器', style: TextStyle(color: Colors.white)),
+            backgroundColor: Colors.black54,
+            foregroundColor: Colors.white,
+            elevation: 0,
+            leading: IconButton(
+              icon: const Icon(Icons.close, color: Colors.white),
+              onPressed: () => Navigator.of(dialogContext).pop(),
+            ),
+          ),
+          body: GestureDetector(
+            onDoubleTap: () => Navigator.of(dialogContext).pop(),
+            child: Center(
+              child: InteractiveViewer(
+                panEnabled: true,
+                boundaryMargin: const EdgeInsets.all(20),
+                minScale: 0.5,
+                maxScale: 4.0,
+                child: Image.memory(
+                  bytes,
+                  fit: BoxFit.contain,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildSessionsDrawer(BuildContext context, WidgetRef ref) {
     final sessions = ref.watch(imageSessionListProvider);
     return Drawer(
@@ -513,11 +554,15 @@ class _ImagePageState extends ConsumerState<ImagePage> {
                                                   ),
                                                 ),
                                               )
-                                            : Image.memory(
-                                                msg.image,
-                                                height: 240,
-                                                fit: BoxFit.cover,
-                                              ),
+                                            : GestureDetector(
+                                                 onTap: () => _showImageViewer(reversedIndex),
+                                                 onDoubleTap: () => _showImageViewer(reversedIndex),
+                                                 child: Image.memory(
+                                                   msg.image,
+                                                   height: 320,
+                                                   fit: BoxFit.cover,
+                                                 ),
+                                               ),
                                       ),
                                     ),
                                     if (msg.aiDescription != null && msg.aiDescription!.isNotEmpty && msg.image.isNotEmpty)
