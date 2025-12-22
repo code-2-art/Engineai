@@ -5,7 +5,8 @@
 
 ## image models.
 
-[image]doc/image/imagen20251222005636.png[/image]
+<img src="./doc/image/imagen20251222005636.png" width="350px">
+
 
 ## Getting Started
 
