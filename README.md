@@ -2,7 +2,7 @@
 
 ## LLM
 
-<img src="./doc/image/image20251222233720.png" width="350px">
+<img src="./doc/image/image20251223010607.png" width="350px">
 
 
 ## imagen models.
