@@ -1,5 +1,0 @@
-
-module share_plus.Swift {
-  header "share_plus-Swift.h"
-  requires objc
-}

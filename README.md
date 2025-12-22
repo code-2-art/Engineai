@@ -1,4 +1,4 @@
-# Enginai
+# Engineai
 
 ## LLM
 
