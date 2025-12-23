@@ -46,7 +46,7 @@ class _ImagePageState extends ConsumerState<ImagePage> {
                   ? Icon(Icons.check, size: 16, color: Theme.of(context).colorScheme.primary)
                   : null,
                 onPress: () {
-                  ref.read(imageCurrentModelProvider.notifier).state = name;
+                  ref.read(imageCurrentModelProvider.notifier).setModel(name);
                 },
               )).toList(),
             ),
@@ -449,7 +449,7 @@ class _ImagePageState extends ConsumerState<ImagePage> {
                     itemBuilder: (context, index) {
                       final reversedIndex = messages.length - 1 - index;
                       final msg = messages[reversedIndex];
-                      final timeStr = '${msg.timestamp.hour.toString().padLeft(2, '0')}:${msg.timestamp.minute.toString().padLeft(2, '0')}';
+                      final timeStr = "${msg.timestamp.year}-${msg.timestamp.month.toString().padLeft(2, '0')}-${msg.timestamp.day.toString().padLeft(2, '0')} ${msg.timestamp.hour.toString().padLeft(2, '0')}:${msg.timestamp.minute.toString().padLeft(2, '0')}";
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
                         child: Column(
@@ -471,28 +471,81 @@ class _ImagePageState extends ConsumerState<ImagePage> {
                                 constraints: BoxConstraints(
                                   maxWidth: MediaQuery.of(context).size.width * 0.75,
                                 ),
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: Theme.of(context).colorScheme.primaryContainer,
-                                  borderRadius: BorderRadius.circular(18),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.04),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 2),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: Theme.of(context).colorScheme.primaryContainer,
+                                        borderRadius: BorderRadius.circular(18),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withOpacity(0.04),
+                                            blurRadius: 8,
+                                            offset: const Offset(0, 2),
+                                          ),
+                                        ],
+                                      ),
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                        child: Text(
+                                          msg.prompt,
+                                          style: TextStyle(
+                                            color: Theme.of(context).colorScheme.onPrimaryContainer,
+                                            fontSize: 14,
+                                            height: 1.5,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        IconButton(
+                                          icon: const Icon(Icons.copy_rounded, size: 14),
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(
+                                            minWidth: 20,
+                                            maxWidth: 20,
+                                            minHeight: 20,
+                                            maxHeight: 20,
+                                          ),
+                                          onPressed: () {
+                                            services.Clipboard.setData(services.ClipboardData(text: msg.prompt));
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(
+                                                content: Text('已复制到剪贴板'),
+                                                behavior: SnackBarBehavior.floating,
+                                                width: 200,
+                                              ),
+                                            );
+                                          },
+                                          tooltip: '复制',
+                                          style: IconButton.styleFrom(
+                                            foregroundColor: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        IconButton(
+                                          icon: const Icon(Icons.delete_outline_rounded, size: 14),
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(
+                                            minWidth: 20,
+                                            maxWidth: 20,
+                                            minHeight: 20,
+                                            maxHeight: 20,
+                                          ),
+                                          onPressed: () => _deleteImage(reversedIndex),
+                                          tooltip: '删除',
+                                          style: IconButton.styleFrom(
+                                            foregroundColor: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ],
-                                ),
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                                  child: Text(
-                                    msg.prompt,
-                                    style: TextStyle(
-                                      color: Theme.of(context).colorScheme.onPrimaryContainer,
-                                      fontSize: 14,
-                                      height: 1.5,
-                                    ),
-                                  ),
                                 ),
                               ),
                             ),
@@ -638,7 +691,7 @@ class _ImagePageState extends ConsumerState<ImagePage> {
                                               ? Icon(Icons.check, size: 16, color: Theme.of(context).colorScheme.primary)
                                               : null,
                                             onPress: () {
-                                              ref.read(imageCurrentModelProvider.notifier).state = name;
+                                              ref.read(imageCurrentModelProvider.notifier).setModel(name);
                                             },
                                           )).toList(),
                                         ),

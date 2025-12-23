@@ -9,6 +9,7 @@ final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
 class SharedPrefsService {
   static const String _currentSessionIdKey = 'current_session_id';
   static const String _currentImageSessionIdKey = 'current_image_session_id';
+  static const String _currentImageModelKey = 'current_image_model';
 
   final SharedPreferences _prefs;
 
@@ -36,6 +37,14 @@ class SharedPrefsService {
 
   String? getCurrentImageSessionId() {
     return _prefs.getString(_currentImageSessionIdKey);
+  }
+
+  String getCurrentImageModel() {
+    return _prefs.getString(_currentImageModelKey) ?? '';
+  }
+
+  Future<void> saveCurrentImageModel(String model) async {
+    await _prefs.setString(_currentImageModelKey, model);
   }
 }
 

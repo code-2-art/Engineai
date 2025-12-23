@@ -6,6 +6,7 @@ import 'package:collection/collection.dart';
 import '../models/chat_session.dart';
 import '../models/llm_configs.dart';
 import 'llm_storage_service.dart';
+import 'shared_prefs_service.dart';
 
 abstract class LLMProvider {
   Stream<String> generateStream(List<Message> history, String prompt, {List<Map<String, dynamic>>? userContentParts, String? systemPrompt});
@@ -201,9 +202,12 @@ class ConfigNotifier extends AsyncNotifier<Map<String, ProviderConfig>> {
     
     final defaultModel = data['defaultModel'] as String?;
     if (defaultModel != null && _isValidModel(providers, defaultModel)) {
-      Future.microtask(() {
+      Future.microtask(() async {
         ref.read(chatCurrentModelProvider.notifier).state = defaultModel;
-        ref.read(imageCurrentModelProvider.notifier).state = defaultModel;
+        final imageNotifier = ref.read(imageCurrentModelProvider.notifier);
+        if (imageNotifier.state.isEmpty) {
+          imageNotifier.setModel(defaultModel);
+        }
         print('ConfigNotifier: Default model updated for chat and image: $defaultModel');
       });
     }
@@ -344,7 +348,21 @@ class ConfigNotifier extends AsyncNotifier<Map<String, ProviderConfig>> {
 final configProvider = AsyncNotifierProvider<ConfigNotifier, Map<String, ProviderConfig>>(ConfigNotifier.new);
 
 final chatCurrentModelProvider = StateProvider<String>((ref) => 'deepseek/deepseek-chat');
-final imageCurrentModelProvider = StateProvider<String>((ref) => '');
+
+class CurrentImageModelNotifier extends StateNotifier<String> {
+  final SharedPrefsService _prefsService;
+
+  CurrentImageModelNotifier(this._prefsService) : super(_prefsService.getCurrentImageModel()) {}
+
+  Future<void> setModel(String model) async {
+    state = model;
+    await _prefsService.saveCurrentImageModel(model);
+  }
+}
+
+final imageCurrentModelProvider = StateNotifierProvider<CurrentImageModelNotifier, String>((ref) {
+  return CurrentImageModelNotifier(ref.watch(sharedPrefsServiceProvider));
+});
 
 final chatLlmProvider = FutureProvider<LLMProvider>((ref) async {
   print('chatLlmProvider: initialization started');

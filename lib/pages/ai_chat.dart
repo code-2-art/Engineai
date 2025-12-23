@@ -286,7 +286,6 @@ class _AiChatState extends ConsumerState<AiChat> {
         child: Scaffold(
           backgroundColor: Colors.black,
           appBar: AppBar(
-            title: const Text('图像查看器', style: TextStyle(color: Colors.white)),
             backgroundColor: Colors.black54,
             foregroundColor: Colors.white,
             elevation: 0,
