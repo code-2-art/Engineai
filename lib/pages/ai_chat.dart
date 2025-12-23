@@ -32,7 +32,7 @@ class _AiChatState extends ConsumerState<AiChat> {
   final ScrollController _scrollController = ScrollController();
   bool _isSending = false;
   StreamSubscription<String>? _responseSubscription;
-  String? _imageBase64;
+  List<String> _imageBase64s = [];
 
   @override
   void dispose() {
@@ -102,16 +102,20 @@ class _AiChatState extends ConsumerState<AiChat> {
       final file = result.files.first;
       final path = file.path;
       if (path != null) {
-        final bytes = await FlutterImageCompress.compressWithFile(
-          path,
-          minWidth: 1024,
-          quality: 90,
-          format: CompressFormat.png,
-        );
-        if (bytes != null) {
-          _imageBase64 = base64Encode(bytes);
-          if (mounted) setState(() {});
+        Uint8List bytes;
+        try {
+          bytes = (await FlutterImageCompress.compressWithFile(
+            path,
+            minWidth: 1024,
+            quality: 90,
+            format: CompressFormat.png,
+          )) ?? await File(path).readAsBytes();
+        } catch (e) {
+          print('图片压缩失败: $e，使用原图');
+          bytes = await File(path).readAsBytes();
         }
+        _imageBase64s.add(base64Encode(bytes));
+        if (mounted) setState(() {});
       }
     }
   }
@@ -137,16 +141,14 @@ class _AiChatState extends ConsumerState<AiChat> {
       
       final bool supportsVision = await ref.read(chatSupportsVisionProvider.future);
       List<Map<String, dynamic>>? userContentParts;
-      if (supportsVision && _imageBase64 != null) {
-        userContentParts = [
-          {"type": "text", "text": prompt},
-          {
+      if (supportsVision && _imageBase64s.isNotEmpty) {
+        userContentParts = [{"type": "text", "text": prompt}];
+        for (final b64 in _imageBase64s) {
+          userContentParts!.add({
             "type": "image_url",
-            "image_url": {
-              "url": "data:image/png;base64,$_imageBase64"
-            }
-          }
-        ];
+            "image_url": {"url": "data:image/png;base64,$b64"}
+          });
+        }
       }
       final userMessage = Message(isUser: true, text: prompt, sender: '我', contentParts: userContentParts);
       final updatedMessages = [...currentSession.messages, userMessage];
@@ -164,7 +166,7 @@ class _AiChatState extends ConsumerState<AiChat> {
       );
 
       _controller.clear();
-      _imageBase64 = null;
+      _imageBase64s.clear();
       _scrollToBottom();
 
       ref.read(currentResponseProvider.notifier).state = '';
@@ -315,23 +317,26 @@ class _AiChatState extends ConsumerState<AiChat> {
 
   Widget _buildImagePreview(Message message) {
     if (message.contentParts == null || !message.isUser) return const SizedBox.shrink();
+    List<Widget> imageWidgets = [];
     for (final part in message.contentParts!) {
       if (part['type'] == 'image_url') {
         final url = part['image_url']['url'] as String?;
         if (url != null && url.startsWith('data:image')) {
           final base64Str = url.split(',')[1];
           final bytes = base64Decode(base64Str);
-          return Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: GestureDetector(
-                onTap: () => _showImageViewer(bytes),
-                onDoubleTap: () => _showImageViewer(bytes),
-                child: Image.memory(
-                  bytes,
-                  height: 320,
-                  fit: BoxFit.cover,
+          imageWidgets.add(
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: GestureDetector(
+                  onTap: () => _showImageViewer(bytes),
+                  onDoubleTap: () => _showImageViewer(bytes),
+                  child: Image.memory(
+                    bytes,
+                    height: 240,
+                    fit: BoxFit.cover,
+                  ),
                 ),
               ),
             ),
@@ -339,7 +344,13 @@ class _AiChatState extends ConsumerState<AiChat> {
         }
       }
     }
-    return const SizedBox.shrink();
+    if (imageWidgets.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Column(
+        children: imageWidgets,
+      ),
+    );
   }
 
   @override
@@ -593,45 +604,66 @@ class _AiChatState extends ConsumerState<AiChat> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (_imageBase64 != null)
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: Stack(
-                      children: [
-                        GestureDetector(
-                          onTap: () => _showImageViewer(base64Decode(_imageBase64!)),
-                          onDoubleTap: () => _showImageViewer(base64Decode(_imageBase64!)),
-                          child: Image.memory(
-                            base64Decode(_imageBase64!),
-                            height: 200,
-                            width: double.infinity,
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                        Positioned(
-                          top: 4,
-                          right: 4,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.surface,
-                              shape: BoxShape.circle,
+                if (_imageBase64s.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: SizedBox(
+                      height: 220,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: _imageBase64s.length,
+                        itemBuilder: (context, index) {
+                          final b64 = _imageBase64s[index];
+                          final bytes = base64Decode(b64);
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: SizedBox(
+                              width: 150,
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: Stack(
+                                  children: [
+                                    Positioned.fill(
+                                      child: GestureDetector(
+                                        onTap: () => _showImageViewer(bytes),
+                                        child: Image.memory(
+                                          bytes,
+                                          fit: BoxFit.cover,
+                                        ),
+                                      ),
+                                    ),
+                                    Positioned(
+                                      top: 4,
+                                      right: 4,
+                                      child: GestureDetector(
+                                        onTap: () {
+                                          setState(() {
+                                            _imageBase64s.removeAt(index);
+                                          });
+                                        },
+                                        child: Container(
+                                          padding: const EdgeInsets.all(4),
+                                          decoration: BoxDecoration(
+                                            color: Colors.black54,
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: const Icon(
+                                            Icons.close,
+                                            size: 16,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
-                            child: IconButton(
-                              icon: const Icon(Icons.close, size: 18),
-                              padding: const EdgeInsets.all(4),
-                              constraints: const BoxConstraints(),
-                              onPressed: () {
-                                _imageBase64 = null;
-                                setState(() {});
-                              },
-                            ),
-                          ),
-                        ),
-                      ],
+                          );
+                        },
+                      ),
                     ),
                   ),
-                if (_imageBase64 != null)
-                  const SizedBox(height: 12),
                 Row(
                   children: [
                     Expanded(
@@ -845,7 +877,7 @@ class _AiChatState extends ConsumerState<AiChat> {
                                   data: (supportsVision) {
                                     if (supportsVision && !_isSending) {
                                       return IconButton(
-                                        icon: _imageBase64 != null
+                                        icon: _imageBase64s.isNotEmpty
                                             ? Icon(Icons.image, size: 14, color: Theme.of(context).colorScheme.primary)
                                             : const Icon(Icons.add_photo_alternate_outlined, size: 14),
                                         tooltip: '上传图片',
