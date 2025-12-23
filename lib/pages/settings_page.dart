@@ -217,6 +217,7 @@ class LLMSettings extends ConsumerWidget {
                       name: nameController.text.trim(),
                       baseUrl: baseUrlController.text.trim(),
                       apiKey: apiKeyController.text.trim(),
+                      models: existing?.models ?? const [],
                     );
                     if (existing != null && originalName != null && originalName != newConfig.name) {
                       ref.read(configProvider.notifier).removeProvider(originalName);
