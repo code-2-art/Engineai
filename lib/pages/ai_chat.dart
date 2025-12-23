@@ -57,7 +57,7 @@ class _AiChatState extends ConsumerState<AiChat> {
     if (fullResponse.isEmpty) return;
     final sessionId = ref.read(currentSessionIdProvider);
     if (sessionId == null) return;
-    final currentModel = ref.read(currentModelProvider);
+    final currentModel = ref.read(chatCurrentModelProvider);
     final aiMessage = Message(isUser: false, text: fullResponse, sender: currentModel);
     final session = ref.read(sessionListProvider).firstWhere((s) => s.id == sessionId);
     await ref.read(sessionListProvider.notifier).updateSession(
@@ -135,7 +135,7 @@ class _AiChatState extends ConsumerState<AiChat> {
 
       final currentSession = ref.read(sessionListProvider).firstWhere((s) => s.id == sessionId);
       
-      final bool supportsVision = await ref.read(supportsVisionProvider.future);
+      final bool supportsVision = await ref.read(chatSupportsVisionProvider.future);
       List<Map<String, dynamic>>? userContentParts;
       if (supportsVision && _imageBase64 != null) {
         userContentParts = [
@@ -170,7 +170,7 @@ class _AiChatState extends ConsumerState<AiChat> {
       ref.read(currentResponseProvider.notifier).state = '';
 
       print('AiChat: Fetching LLM provider...');
-      final llmFuture = ref.read(llmProvider.future);
+      final llmFuture = ref.read(chatLlmProvider.future);
       final llm = await llmFuture;
       print('AiChat: LLM provider ready.');
 
@@ -533,7 +533,7 @@ class _AiChatState extends ConsumerState<AiChat> {
                           ),
                         );
                       } else {
-                        final currentModel = ref.watch(currentModelProvider);
+                        final currentModel = ref.watch(chatCurrentModelProvider);
                         return Padding(
                           padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
                           child: Column(
@@ -771,8 +771,8 @@ class _AiChatState extends ConsumerState<AiChat> {
                             const SizedBox(width: 8),
                             Consumer(
                               builder: (context, ref, child) {
-                                final namesAsync = ref.watch(modelNamesProvider);
-                                final currentModel = ref.watch(currentModelProvider);
+                                final namesAsync = ref.watch(chatModelNamesProvider);
+                                final currentModel = ref.watch(chatCurrentModelProvider);
                                 return namesAsync.when(
                                   data: (names) {
                                     if (names.isEmpty) {
@@ -795,7 +795,7 @@ class _AiChatState extends ConsumerState<AiChat> {
                                         FItemGroup(
                                           children: [
                                             ...names.map((name) => FItem(title: Text(name), suffix: currentModel == name ? Icon(Icons.check, size: 16, color: Theme.of(context).colorScheme.primary) : null, onPress: () {
-                                              ref.read(configProvider.notifier).updateDefaultModel(name);
+                                              ref.read(chatCurrentModelProvider.notifier).state = name;
                                             },
                                             )),
                                             FItem(
@@ -840,7 +840,7 @@ class _AiChatState extends ConsumerState<AiChat> {
                             const SizedBox(width: 8),
                             Consumer(
                               builder: (context, ref, child) {
-                                final supportsVisionAsync = ref.watch(supportsVisionProvider);
+                                final supportsVisionAsync = ref.watch(chatSupportsVisionProvider);
                                 return supportsVisionAsync.when(
                                   data: (supportsVision) {
                                     if (supportsVision && !_isSending) {

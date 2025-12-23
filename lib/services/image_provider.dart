@@ -148,7 +148,7 @@ class CustomImageGenerator implements ImageGenerator {
 }
 
 final imageGeneratorProvider = FutureProvider<ImageGenerator>((ref) async {
-  final currentModel = ref.watch(currentModelProvider);
+  final currentModel = ref.watch(imageCurrentModelProvider);
   final providers = await ref.watch(configProvider.future);
   final parts = currentModel.split('/');
   if (parts.length != 2) {

@@ -33,7 +33,7 @@ void main() async {
   
   // Pre-warm the configuration and LLM provider
   unawaited(container.read(configProvider.future));
-  unawaited(container.read(llmProvider.future));
+  unawaited(container.read(chatLlmProvider.future));
 
   runApp(
     UncontrolledProviderScope(

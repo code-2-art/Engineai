@@ -29,7 +29,7 @@ class _ImagePageState extends ConsumerState<ImagePage> {
 
   Widget _buildModelSelector(BuildContext context, WidgetRef ref) {
     final namesAsync = ref.watch(imageModelNamesProvider);
-    final currentModel = ref.watch(currentModelProvider);
+    final currentModel = ref.watch(imageCurrentModelProvider);
     return namesAsync.when(
       data: (names) {
         if (names.isEmpty) {
@@ -46,8 +46,7 @@ class _ImagePageState extends ConsumerState<ImagePage> {
                   ? Icon(Icons.check, size: 16, color: Theme.of(context).colorScheme.primary)
                   : null,
                 onPress: () {
-                  ref.read(currentModelProvider.notifier).state = name;
-                  ref.read(configProvider.notifier).updateDefaultModel(name);
+                  ref.read(imageCurrentModelProvider.notifier).state = name;
                 },
               )).toList(),
             ),
@@ -642,8 +641,8 @@ class _ImagePageState extends ConsumerState<ImagePage> {
                           const SizedBox(width: 8),
                           Consumer(
                             builder: (context, ref, child) {
-                              final namesAsync = ref.watch(modelNamesProvider);
-                              final currentModel = ref.watch(currentModelProvider);
+                              final namesAsync = ref.watch(imageModelNamesProvider);
+                              final currentModel = ref.watch(imageCurrentModelProvider);
                               return namesAsync.when(
                                 data: (names) {
                                   if (names.isEmpty) {
@@ -660,8 +659,7 @@ class _ImagePageState extends ConsumerState<ImagePage> {
                                             ? Icon(Icons.check, size: 16, color: Theme.of(context).colorScheme.primary)
                                             : null,
                                           onPress: () {
-                                            ref.read(currentModelProvider.notifier).state = name;
-                                            ref.read(configProvider.notifier).updateDefaultModel(name);
+                                            ref.read(imageCurrentModelProvider.notifier).state = name;
                                           },
                                         )).toList(),
                                       ),

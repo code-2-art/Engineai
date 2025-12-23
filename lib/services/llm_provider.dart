@@ -202,8 +202,9 @@ class ConfigNotifier extends AsyncNotifier<Map<String, ProviderConfig>> {
     final defaultModel = data['defaultModel'] as String?;
     if (defaultModel != null && _isValidModel(providers, defaultModel)) {
       Future.microtask(() {
-        ref.read(currentModelProvider.notifier).state = defaultModel;
-        print('ConfigNotifier: Default model updated: $defaultModel');
+        ref.read(chatCurrentModelProvider.notifier).state = defaultModel;
+        ref.read(imageCurrentModelProvider.notifier).state = defaultModel;
+        print('ConfigNotifier: Default model updated for chat and image: $defaultModel');
       });
     }
     print('ConfigNotifier: build() finished');
@@ -211,7 +212,7 @@ class ConfigNotifier extends AsyncNotifier<Map<String, ProviderConfig>> {
   }
 
   Future<void> _save(Map<String, ProviderConfig> providers) async {
-    final currentModel = ref.read(currentModelProvider);
+    final currentModel = ref.read(chatCurrentModelProvider);
     final Map<String, dynamic> provData = {
       for (final provider in providers.values) provider.name: provider.toJson()
     };
@@ -304,14 +305,13 @@ class ConfigNotifier extends AsyncNotifier<Map<String, ProviderConfig>> {
   }
 
   Future<void> updateDefaultModel(String newModel) async {
-    ref.read(currentModelProvider.notifier).state = newModel;
     final currentProviders = state.valueOrNull ?? {};
     await _save(currentProviders);
   }
 
   Map<String, dynamic> exportToJson() {
     final providers = state.valueOrNull ?? {};
-    final currentModel = ref.read(currentModelProvider);
+    final currentModel = ref.read(chatCurrentModelProvider);
     final Map<String, dynamic> provData = {
       for (final provider in providers.values) provider.name: provider.toJson()
     };
@@ -335,19 +335,21 @@ class ConfigNotifier extends AsyncNotifier<Map<String, ProviderConfig>> {
     
     final defaultModel = jsonData['defaultModel'] as String?;
     if (defaultModel != null && _isValidModel(newProviders, defaultModel)) {
-      ref.read(currentModelProvider.notifier).state = defaultModel;
+      ref.read(chatCurrentModelProvider.notifier).state = defaultModel;
+      ref.read(imageCurrentModelProvider.notifier).state = defaultModel;
     }
   }
 }
 
 final configProvider = AsyncNotifierProvider<ConfigNotifier, Map<String, ProviderConfig>>(ConfigNotifier.new);
 
-final currentModelProvider = StateProvider<String>((ref) => 'deepseek/deepseek-chat');
+final chatCurrentModelProvider = StateProvider<String>((ref) => 'deepseek/deepseek-chat');
+final imageCurrentModelProvider = StateProvider<String>((ref) => '');
 
-final llmProvider = FutureProvider<LLMProvider>((ref) async {
-  print('llmProvider: initialization started');
-  final currentModel = ref.watch(currentModelProvider);
-  print('llmProvider: currentModel is $currentModel');
+final chatLlmProvider = FutureProvider<LLMProvider>((ref) async {
+  print('chatLlmProvider: initialization started');
+  final currentModel = ref.watch(chatCurrentModelProvider);
+  print('chatLlmProvider: currentModel is $currentModel');
   final providers = await ref.watch(configProvider.future);
   print('llmProvider: providers loaded, ${providers.length} entries');
   
@@ -374,7 +376,7 @@ final llmProvider = FutureProvider<LLMProvider>((ref) async {
   );
 });
 
-final modelNamesProvider = FutureProvider<List<String>>((ref) async {
+final chatModelNamesProvider = FutureProvider<List<String>>((ref) async {
   final providers = await ref.watch(configProvider.future);
   final List<String> names = [];
   for (final provider in providers.values) {
@@ -396,8 +398,8 @@ final imageModelNamesProvider = FutureProvider<List<String>>((ref) async {
   return names;
 });
 
-final supportsVisionProvider = FutureProvider<bool>((ref) async {
-  final currentModel = ref.watch(currentModelProvider);
+final chatSupportsVisionProvider = FutureProvider<bool>((ref) async {
+  final currentModel = ref.watch(chatCurrentModelProvider);
   final providers = await ref.watch(configProvider.future);
   final parts = currentModel.split('/');
   if (parts.length != 2) return false;
