@@ -399,8 +399,7 @@ class _ImagePageState extends ConsumerState<ImagePage> {
   Widget build(BuildContext context) {
     final currentSession = ref.watch(currentImageSessionProvider);
     final messages = currentSession?.messages ?? <ImageMessage>[];
-    final currentTitle = currentSession?.title ?? '新图像会话';
-    final bool isGenerating = currentSession != null && currentSession.messages.isNotEmpty && currentSession.messages.last.image.isEmpty;
+    final bool isGenerating = messages.isNotEmpty && messages.last.image.isEmpty;
 
     return Scaffold(
       key: _scaffoldKey,
@@ -413,10 +412,6 @@ class _ImagePageState extends ConsumerState<ImagePage> {
             padding: const EdgeInsets.all(12.0),
             child: Row(
               children: [
-                Text(
-                  currentTitle,
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-                ),
                 const Spacer(),
                 IconButton(
                   icon: const Icon(Icons.add),
@@ -619,76 +614,79 @@ class _ImagePageState extends ConsumerState<ImagePage> {
                     controller: _promptController,
                     decoration: InputDecoration(
                       hintText: isGenerating ? '生成中...' : (messages.isEmpty ? '描述图像，例如: \"一只可爱的猫在太空飞翔\"' : '编辑最后一张图片，例如: \"把猫的眼睛变成红色激光眼\"'),
-                      prefixIcon: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.upload_file, size: 20),
-                            tooltip: '上传图像',
-                            constraints: const BoxConstraints(
-                              minWidth: 32,
-                              maxWidth: 32,
-                              minHeight: 32,
-                              maxHeight: 32,
-                            ),
-                            padding: EdgeInsets.zero,
-                            style: IconButton.styleFrom(
-                              shape: const CircleBorder(),
-                              hoverColor: Theme.of(context).colorScheme.primary.withOpacity(0.08),
-                            ),
-                            onPressed: _uploadImage,
-                          ),
-                          const SizedBox(width: 8),
-                          Consumer(
-                            builder: (context, ref, child) {
-                              final namesAsync = ref.watch(imageModelNamesProvider);
-                              final currentModel = ref.watch(imageCurrentModelProvider);
-                              return namesAsync.when(
-                                data: (names) {
-                                  if (names.isEmpty) {
-                                    return const SizedBox(width: 32, height: 32);
-                                  }
-                                  return FPopoverMenu(
-                                    menuAnchor: Alignment.topCenter,
-                                    childAnchor: Alignment.bottomCenter,
-                                    menu: [
-                                      FItemGroup(
-                                        children: names.map((name) => FItem(
-                                          title: Text(name),
-                                          suffix: currentModel == name
-                                            ? Icon(Icons.check, size: 16, color: Theme.of(context).colorScheme.primary)
-                                            : null,
-                                          onPress: () {
-                                            ref.read(imageCurrentModelProvider.notifier).state = name;
-                                          },
-                                        )).toList(),
+                      prefixIcon: Padding(
+                        padding: const EdgeInsets.only(left: 8),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Consumer(
+                              builder: (context, ref, child) {
+                                final namesAsync = ref.watch(imageModelNamesProvider);
+                                final currentModel = ref.watch(imageCurrentModelProvider);
+                                return namesAsync.when(
+                                  data: (names) {
+                                    if (names.isEmpty) {
+                                      return const SizedBox(width: 32, height: 32);
+                                    }
+                                    return FPopoverMenu(
+                                      menuAnchor: Alignment.topCenter,
+                                      childAnchor: Alignment.bottomCenter,
+                                      menu: [
+                                        FItemGroup(
+                                          children: names.map((name) => FItem(
+                                            title: Text(name),
+                                            suffix: currentModel == name
+                                              ? Icon(Icons.check, size: 16, color: Theme.of(context).colorScheme.primary)
+                                              : null,
+                                            onPress: () {
+                                              ref.read(imageCurrentModelProvider.notifier).state = name;
+                                            },
+                                          )).toList(),
+                                        ),
+                                      ],
+                                      builder: (context, controller, child) => IconButton(
+                                        icon: const Icon(Icons.model_training, size: 14),
+                                        tooltip: '切换模型',
+                                        constraints: const BoxConstraints(maxWidth: 32, maxHeight: 32),
+                                        padding: EdgeInsets.zero,
+                                        style: IconButton.styleFrom(
+                                          shape: const CircleBorder(),
+                                          hoverColor: Theme.of(context).colorScheme.primary.withOpacity(0.08),
+                                        ),
+                                        onPressed: controller.toggle,
                                       ),
-                                    ],
-                                    builder: (context, controller, child) => IconButton(
-                                      icon: const Icon(Icons.model_training, size: 20),
-                                      tooltip: '切换模型',
-                                      constraints: const BoxConstraints(maxWidth: 32, maxHeight: 32),
-                                      padding: EdgeInsets.zero,
-                                      style: IconButton.styleFrom(
-                                        shape: const CircleBorder(),
-                                        hoverColor: Theme.of(context).colorScheme.primary.withOpacity(0.08),
-                                      ),
-                                      onPressed: controller.toggle,
-                                    ),
-                                  );
-                                },
-                                loading: () => const SizedBox(width: 32, height: 32),
-                                error: (err, stack) => IconButton(
-                                  icon: const Icon(Icons.error_outline, size: 20, color: Colors.red),
-                                  tooltip: '加载模型失败',
-                                  constraints: const BoxConstraints(maxWidth: 32, maxHeight: 32),
-                                  padding: EdgeInsets.zero,
-                                  onPressed: null,
-                                ),
-                              );
-                            },
-                          ),
-                        ],
+                                    );
+                                  },
+                                  loading: () => const SizedBox(width: 32, height: 32),
+                                  error: (err, stack) => IconButton(
+                                    icon: const Icon(Icons.error_outline, size: 14, color: Colors.red),
+                                    tooltip: '加载模型失败',
+                                    constraints: const BoxConstraints(maxWidth: 32, maxHeight: 32),
+                                    padding: EdgeInsets.zero,
+                                    onPressed: null,
+                                  ),
+                                );
+                              },
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton(
+                              icon: const Icon(Icons.upload_file, size: 14),
+                              tooltip: '上传图像',
+                              constraints: const BoxConstraints(
+                                minWidth: 32,
+                                maxWidth: 32,
+                                minHeight: 32,
+                                maxHeight: 32,
+                              ),
+                              padding: EdgeInsets.zero,
+                              style: IconButton.styleFrom(
+                                shape: const CircleBorder(),
+                                hoverColor: Theme.of(context).colorScheme.primary.withOpacity(0.08),
+                              ),
+                              onPressed: _uploadImage,
+                            ),
+                          ],
+                        ),
                       ),
                       suffixIcon: ValueListenableBuilder<TextEditingValue>(
                         valueListenable: _promptController,

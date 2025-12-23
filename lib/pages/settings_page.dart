@@ -595,12 +595,8 @@ class LLMSettings extends ConsumerWidget {
                                           separatorBuilder: (_, __) => const SizedBox(height: 8),
                                           itemBuilder: (context, mIndex) {
                                             final model = provider.models[mIndex];
-                                            return Container(
+                                            return Padding(
                                               padding: const EdgeInsets.all(12),
-                                              decoration: BoxDecoration(
-                                                color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
-                                                borderRadius: BorderRadius.circular(8),
-                                              ),
                                               child: Row(
                                                 children: [
                                                   Expanded(
@@ -614,13 +610,30 @@ class LLMSettings extends ConsumerWidget {
                                                       ],
                                                     ),
                                                   ),
-                                                  Wrap(
-                                                    spacing: 4.0,
-                                                    runSpacing: 4.0,
-                                                    children: model.types.map((t) => Chip(
-                                                      label: Text(t.name.toUpperCase()),
-                                                      backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                                                    )).toList(),
+                                                  Row(
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    children: model.types.map((t) {
+                                                      IconData icon = Icons.help_outline;
+                                                      switch (t) {
+                                                        case ModelType.llm:
+                                                          icon = Icons.chat_bubble_outline;
+                                                          break;
+                                                        case ModelType.vl:
+                                                          icon = Icons.visibility_outlined;
+                                                          break;
+                                                        case ModelType.imageGen:
+                                                          icon = Icons.image_outlined;
+                                                          break;
+                                                        case ModelType.embedding:
+                                                          icon = Icons.layers_outlined;
+                                                          break;
+                                                      }
+                                                      return Icon(
+                                                        icon,
+                                                        size: 16,
+                                                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                                      );
+                                                    }).toList(),
                                                   ),
                                                   const SizedBox(width: 8),
                                                   Checkbox(
