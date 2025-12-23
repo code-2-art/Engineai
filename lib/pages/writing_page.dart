@@ -4,7 +4,10 @@ import 'package:appflowy_editor/appflowy_editor.dart';
 import '../../theme/theme.dart';
 import 'ai_chat.dart';
 import 'package:forui/forui.dart';
-
+import 'dart:async';
+import 'dart:io';
+import 'package:file_picker/file_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 class WritingPage extends ConsumerStatefulWidget {
   const WritingPage({super.key});
 
@@ -15,23 +18,69 @@ class WritingPage extends ConsumerStatefulWidget {
 class _WritingPageState extends ConsumerState<WritingPage> {
   late EditorState editorState;
   double _splitterPosition = 0.6;
+  String? _savePath;
+  DateTime? _lastSaved;
+  Timer? _saveTimer;
+  late SharedPreferences _prefs;
 
   @override
   void initState() {
     super.initState();
     editorState = EditorState.blank();
+    _initPrefs();
   }
 
 
   @override
   void dispose() {
+    _saveTimer?.cancel();
     editorState.dispose();
     super.dispose();
   }
-  
+
+  Future<void> _initPrefs() async {
+    _prefs = await SharedPreferences.getInstance();
+    _savePath = _prefs.getString('writing_save_path');
+    if (mounted) {
+      setState(() {});
+    }
+    _saveTimer = Timer.periodic(const Duration(seconds: 3), (_) => _autoSave());
+  }
 
 
-  
+  Future<void> _autoSave() async {
+    if (_savePath == null || !mounted) return;
+    try {
+      final buffer = StringBuffer();
+      void traverse(Node? node) {
+        if (node == null) return;
+        buffer.write(node.delta?.toPlainText() ?? '');
+        for (final child in node.children) {
+          traverse(child);
+        }
+      }
+      traverse(editorState.document.root);
+      final md = buffer.toString();
+      await File(_savePath!).writeAsString(md);
+      if (mounted) {
+        _lastSaved = DateTime.now();
+        setState(() {});
+      }
+    } catch (e) {
+      print('保存失败: $e');
+    }
+  }
+
+  void _selectSaveDir() async {
+    final dirPath = await FilePicker.platform.getDirectoryPath();
+    if (dirPath != null && mounted) {
+      _savePath = '$dirPath/writing.md';
+      await _prefs.setString('writing_save_path', _savePath!);
+      await _autoSave();
+      setState(() {});
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
@@ -46,22 +95,57 @@ class _WritingPageState extends ConsumerState<WritingPage> {
             SizedBox(
               width: leftWidth,
               height: double.infinity,
-              child: AppFlowyEditor(
-                editorState: editorState,
-                editorStyle: EditorStyle(
-                  padding: const EdgeInsets.all(16.0),
-                  cursorColor: Theme.of(context).colorScheme.primary,
-                  dragHandleColor: Colors.transparent,
-                  selectionColor: Theme.of(context).colorScheme.primary.withOpacity(0.3),
-                  textStyleConfiguration: TextStyleConfiguration(
-                    text: TextStyle(
-                      fontSize: 16.0,
-                      color: Theme.of(context).colorScheme.onSurface,
+              child: Column(
+                children: [
+                  Container(
+                    height: 48,
+                    padding: const EdgeInsets.all(8.0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _savePath != null ? _savePath!.split('/').last : '未选择保存路径',
+                            style: Theme.of(context).textTheme.titleSmall,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.folder_open),
+                          onPressed: _selectSaveDir,
+                          tooltip: '选择保存文件夹',
+                        ),
+                        if (_lastSaved != null)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8.0),
+                            child: Text(
+                              '保存于: ${_lastSaved!.toLocal().toString().substring(5, 16)}',
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.green),
+                            ),
+                          ),
+                      ],
                     ),
-                    bold: const TextStyle(fontWeight: FontWeight.bold),
                   ),
-                  textSpanDecorator: null,
-                ),
+                  Expanded(
+                    child: AppFlowyEditor(
+                      editorState: editorState,
+                      editorStyle: EditorStyle(
+                        padding: const EdgeInsets.all(16.0),
+                        cursorColor: Theme.of(context).colorScheme.primary,
+                        dragHandleColor: Colors.transparent,
+                        selectionColor: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                        textStyleConfiguration: TextStyleConfiguration(
+                          text: TextStyle(
+                            fontSize: 16.0,
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
+                          bold: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        textSpanDecorator: null,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
             GestureDetector(
