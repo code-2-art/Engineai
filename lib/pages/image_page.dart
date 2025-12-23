@@ -297,7 +297,6 @@ class _ImagePageState extends ConsumerState<ImagePage> {
         child: Scaffold(
           backgroundColor: Colors.black,
           appBar: AppBar(
-            title: const Text('图像查看器', style: TextStyle(color: Colors.white)),
             backgroundColor: Colors.black54,
             foregroundColor: Colors.white,
             elevation: 0,
@@ -613,7 +612,7 @@ class _ImagePageState extends ConsumerState<ImagePage> {
                   child: TextField(
                     controller: _promptController,
                     decoration: InputDecoration(
-                      hintText: isGenerating ? '生成中...' : (messages.isEmpty ? '描述图像，例如: \"一只可爱的猫在太空飞翔\"' : '编辑最后一张图片，例如: \"把猫的眼睛变成红色激光眼\"'),
+                      hintText: isGenerating ? '生成中...' : (messages.isEmpty ? '描述图像' : '编辑最后一张图片'),
                       prefixIcon: Padding(
                         padding: const EdgeInsets.only(left: 8),
                         child: Row(

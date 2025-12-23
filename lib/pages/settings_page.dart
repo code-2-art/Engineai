@@ -190,7 +190,7 @@ class LLMSettings extends ConsumerWidget {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(existing == null ? '添加提供商' : '编辑提供商'),
+        title: Text(existing == null ? '提供商' : '编辑提供商'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -250,7 +250,7 @@ class LLMSettings extends ConsumerWidget {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
-          title: Text(existing == null ? '添加模型' : '编辑模型'),
+          title: Text(existing == null ? '模型' : '编辑模型'),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -499,7 +499,7 @@ class LLMSettings extends ConsumerWidget {
                     child: TextButton.icon(
                       onPressed: () => _showProviderDialog(context, ref),
                       icon: const Icon(Icons.add, size: 16),
-                      label: const Text('添加提供商'),
+                      label: const Text('提供商'),
                       style: TextButton.styleFrom(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         minimumSize: Size.zero,
@@ -566,7 +566,7 @@ class LLMSettings extends ConsumerWidget {
                                             child: TextButton.icon(
                                               onPressed: () => _showModelDialog(context, ref, provider.name),
                                               icon: const Icon(Icons.add, size: 16),
-                                              label: const Text('添加模型'),
+                                              label: const Text('模型'),
                                               style: TextButton.styleFrom(
                                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                                 minimumSize: Size.zero,
