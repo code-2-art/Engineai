@@ -194,11 +194,33 @@ class LLMSettings extends ConsumerWidget {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            FTextField(controller: nameController, hint: '提供商名称 (e.g. deepseek)'),
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(
+                hintText: '提供商名称 (e.g. deepseek)',
+                border: OutlineInputBorder(),
+                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              ),
+            ),
             const SizedBox(height: 8),
-            FTextField(controller: baseUrlController, hint: 'Base URL (e.g. https://api.deepseek.com/v1)'),
+            TextField(
+              controller: baseUrlController,
+              decoration: const InputDecoration(
+                hintText: 'Base URL (e.g. https://api.deepseek.com/v1)',
+                border: OutlineInputBorder(),
+                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              ),
+            ),
             const SizedBox(height: 8),
-            FTextField(controller: apiKeyController, hint: 'API Key', obscureText: true),
+            TextField(
+              controller: apiKeyController,
+              obscureText: true,
+              decoration: const InputDecoration(
+                hintText: 'API Key',
+                border: OutlineInputBorder(),
+                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              ),
+            ),
           ],
         ),
         actions: [
@@ -255,14 +277,32 @@ class LLMSettings extends ConsumerWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                FTextField(controller: nameController, hint: '模型名称 (e.g. deepseek-chat)'),
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    hintText: '模型名称 (e.g. deepseek-chat)',
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                ),
                 const SizedBox(height: 8),
-                FTextField(controller: modelIdController, hint: '模型 ID (e.g. deepseek-chat)'),
+                TextField(
+                  controller: modelIdController,
+                  decoration: const InputDecoration(
+                    hintText: '模型 ID (e.g. deepseek-chat)',
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                ),
                 const SizedBox(height: 8),
-                FTextField(
+                TextField(
                   controller: tempController,
-                  hint: 'Temperature (0.0-2.0)',
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(
+                    hintText: 'Temperature (0.0-2.0)',
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Column(
@@ -693,15 +733,23 @@ class _SystemPromptSettingsState extends ConsumerState<SystemPromptSettings> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            FTextField(
+            TextField(
               controller: nameController,
-              hint: '标题 (例如: 翻译官)',
+              decoration: const InputDecoration(
+                hintText: '标题 (例如: 翻译官)',
+                border: OutlineInputBorder(),
+                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              ),
             ),
             const SizedBox(height: 16),
-            FTextField(
+            TextField(
               controller: contentController,
-              hint: '提示词内容',
               maxLines: 5,
+              decoration: const InputDecoration(
+                hintText: '提示词内容',
+                border: OutlineInputBorder(),
+                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              ),
             ),
           ],
         ),
