@@ -21,8 +21,37 @@
         {
           "name": "grok",
           "modelId": "x-ai/grok-4.1-fast",
-          "temperature": 1.0,
+          "temperature": 0.7,
           "types": ["llm"],
+          "isEnabled": true
+        },
+        {
+          "name": "nano",
+          "modelId": "google/gemini-3-pro-image-preview",
+          "temperature": 0.7,
+          "types": [
+            "imageGen"
+          ],
+          "isEnabled": true
+        },
+        {
+          "name": "claude-sonnet-4.5",
+          "modelId": "anthropic/claude-sonnet-4.5",
+          "temperature": 0.7,
+          "types": [
+            "llm",
+            "vl"
+          ],
+          "isEnabled": true
+        },
+        {
+          "name": "claude-opus-4.5",
+          "modelId": "anthropic/claude-opus-4.5",
+          "temperature": 0.7,
+          "types": [
+            "llm",
+            "vl"
+          ],
           "isEnabled": true
         }
       ]
