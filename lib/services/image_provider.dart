@@ -3,7 +3,8 @@ import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import '../models/chat_session.dart';
-import 'llm_provider.dart'; // for LLMConfig
+import '../models/llm_configs.dart';
+import 'llm_provider.dart';
 
 class ImageGenerationResult {
   final Uint8List? imageBytes;
@@ -20,34 +21,34 @@ abstract class ImageGenerator {
 }
 
 class CustomImageGenerator implements ImageGenerator {
-  final LLMConfig config;
+  final String baseUrl;
+  final String apiKey;
+  final String modelId;
+  final double? temperature;
 
-  const CustomImageGenerator(this.config);
+  const CustomImageGenerator(this.baseUrl, this.apiKey, this.modelId, this.temperature);
+
+  String _normalizeUrl(String url) {
+    var uri = url.trim();
+    if (uri.endsWith('/')) {
+      uri = uri.substring(0, uri.length - 1);
+    }
+    if (uri.endsWith('/chat/completions')) {
+      return uri;
+    }
+    if (uri.endsWith('/v1')) {
+      return '$uri/chat/completions';
+    }
+    return '$uri/v1/chat/completions';
+  }
 
   @override
   Future<ImageGenerationResult> generateImage(String prompt, {String? base64Image, String? mimeType}) async {
-    if (!config.supportsImageGen) {
-      throw Exception('当前模型 "${config.name}" 不支持图像生成。请在设置页面为该模型启用 "支持图像生成"，或切换到支持的模型（如 Google Gemini 3 Pro Image Preview）。');
-    }
-    if (config.apiKey.trim().isEmpty) {
+    if (apiKey.trim().isEmpty) {
       throw Exception('请在设置页面配置有效的 API Key');
     }
 
-    String _normalizeUrl(String url) {
-      var uri = url.trim();
-      if (uri.endsWith('/')) {
-        uri = uri.substring(0, uri.length - 1);
-      }
-      if (uri.endsWith('/chat/completions')) {
-        return uri;
-      }
-      if (uri.endsWith('/v1')) {
-        return '$uri/chat/completions';
-      }
-      return '$uri/v1/chat/completions';
-    }
-
-    final url = Uri.parse(_normalizeUrl(config.baseUrl));
+    final url = Uri.parse(_normalizeUrl(baseUrl));
     List<Map<String, dynamic>> contentParts = [];
     if (base64Image != null && mimeType != null) {
       contentParts.add({
@@ -58,7 +59,7 @@ class CustomImageGenerator implements ImageGenerator {
     contentParts.add({'type': 'text', 'text': prompt});
 
     final body = {
-      'model': config.model,
+      'model': modelId,
       'messages': [
         {'role': 'system', 'content': '你是一个图像生成器。根据用户提示生成图像，并严格以以下格式响应：content 是一个列表，第一个元素必须是 {"type": "image_url", "image_url": {"url": "data:image/png;base64,BASE64_ENCODED_IMAGE"}} 或远程图像URL。不要输出任何其他文本描述或解释。'},
         {'role': 'user', 'content': contentParts}
@@ -66,18 +67,18 @@ class CustomImageGenerator implements ImageGenerator {
       'stream': false,
       'modalities': ['image', 'text'],
       'max_tokens': 4096,
-      if (config.temperature != null) 'temperature': config.temperature!,
+      if (temperature != null) 'temperature': temperature!,
     };
 
     print('ImageGenerator: Request URL: $url');
-    print('ImageGenerator: Request model: ${config.model}');
+    print('ImageGenerator: Request model: $modelId');
     final bodyStr = json.encode(body);
     print('ImageGenerator: Request body preview: ${bodyStr.length < 1000 ? bodyStr : bodyStr.substring(0, 1000)}...');
 
     final response = await http.post(
       url,
       headers: {
-        'Authorization': 'Bearer ${config.apiKey}',
+        'Authorization': 'Bearer $apiKey',
         'Content-Type': 'application/json',
       },
       body: json.encode(body),
@@ -121,7 +122,7 @@ class CustomImageGenerator implements ImageGenerator {
           }
           for (var part in parts.skip(1)) {
             if (part['type'] == 'text' && part['text'] is String) {
-              description += '${part['text']}\\n';
+              description += '${part['text']}\n';
             }
           }
         } else if (contentRaw is String) {
@@ -142,16 +143,34 @@ class CustomImageGenerator implements ImageGenerator {
       }
     }
     print('ImageGenerator: HTTP Error ${response.statusCode}: ${response.body}');
-    throw Exception('图像生成失败: HTTP ${response.statusCode}\\n${response.body}');
+    throw Exception('图像生成失败: HTTP ${response.statusCode}\n${response.body}');
   }
 }
 
 final imageGeneratorProvider = FutureProvider<ImageGenerator>((ref) async {
-  final model = ref.watch(currentModelProvider);
-  final configs = await ref.watch(configProvider.future);
-  final config = configs[model];
-  if (config == null) {
-    throw Exception('未找到模型配置: $model');
+  final currentModel = ref.watch(currentModelProvider);
+  final providers = await ref.watch(configProvider.future);
+  final parts = currentModel.split('/');
+  if (parts.length != 2) {
+    throw Exception('Invalid model format: $currentModel. Expected "provider/model"');
   }
-  return CustomImageGenerator(config);
+  final providerName = parts[0];
+  final modelName = parts.sublist(1).join('/');
+  final provider = providers[providerName];
+  if (provider == null) {
+    throw Exception('Provider "$providerName" not found');
+  }
+  final model = provider.getModel(modelName);
+  if (model == null || !model.isEnabled || !model.types.contains(ModelType.imageGen)) {
+    String reason;
+    if (model == null) {
+      reason = '未找到';
+    } else if (!model.isEnabled) {
+      reason = '已禁用';
+    } else {
+      reason = '不支持图像生成 (types: ${model.types.map((t) => t.name).join(', ')})';
+    }
+    throw Exception('模型不可用: $currentModel ($reason)');
+  }
+  return CustomImageGenerator(provider.baseUrl, provider.apiKey, model.modelId, model.temperature);
 });

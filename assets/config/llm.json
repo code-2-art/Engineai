@@ -1,20 +1,31 @@
 {
-  "defaultModel": "openrouter-grok",
-  "models": [
-    {
-      "name": "deepseek-chat",
+  "defaultModel": "deepseek/deepseek-chat",
+  "providers": {
+    "deepseek": {
+      "baseUrl": "https://api.deepseek.com/v1",
       "apiKey": "",
-      "baseUrl": "https://api.deepseek.com/v1/chat/completions",
-      "model": "deepseek-chat",
-      "isEnabled": true,
-      "temperature": 1.1
+      "models": [
+        {
+          "name": "deepseek-chat",
+          "modelId": "deepseek-chat",
+          "temperature": 1.1,
+          "types": ["llm"],
+          "isEnabled": true
+        }
+      ]
     },
-    {
-      "name": "openrouter-grok",
+    "openrouter": {
+      "baseUrl": "https://openrouter.ai/api/v1",
       "apiKey": "",
-      "baseUrl": "https://openrouter.ai/api/v1/chat/completions",
-      "model": "x-ai/grok-4.1-fast",
-      "isEnabled": true
+      "models": [
+        {
+          "name": "grok",
+          "modelId": "x-ai/grok-4.1-fast",
+          "temperature": 1.0,
+          "types": ["llm"],
+          "isEnabled": true
+        }
+      ]
     }
-  ]
+  }
 }

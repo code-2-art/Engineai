@@ -135,10 +135,7 @@ class _AiChatState extends ConsumerState<AiChat> {
 
       final currentSession = ref.read(sessionListProvider).firstWhere((s) => s.id == sessionId);
       
-      final currentModel = ref.read(currentModelProvider);
-      final configs = await ref.read(configProvider.future);
-      final config = configs[currentModel];
-      final bool supportsVision = config?.supportsVision ?? false;
+      final bool supportsVision = await ref.read(supportsVisionProvider.future);
       List<Map<String, dynamic>>? userContentParts;
       if (supportsVision && _imageBase64 != null) {
         userContentParts = [
@@ -843,11 +840,9 @@ class _AiChatState extends ConsumerState<AiChat> {
                             const SizedBox(width: 8),
                             Consumer(
                               builder: (context, ref, child) {
-                                final configsAsync = ref.watch(configProvider);
-                                final currentModel = ref.watch(currentModelProvider);
-                                return configsAsync.when(
-                                  data: (configs) {
-                                    final supportsVision = configs[currentModel]?.supportsVision ?? false;
+                                final supportsVisionAsync = ref.watch(supportsVisionProvider);
+                                return supportsVisionAsync.when(
+                                  data: (supportsVision) {
                                     if (supportsVision && !_isSending) {
                                       return IconButton(
                                         icon: _imageBase64 != null

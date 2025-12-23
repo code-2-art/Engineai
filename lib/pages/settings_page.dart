@@ -9,6 +9,7 @@ import '../theme/theme.dart';
 import '../models/system_prompt.dart';
 import '../services/system_prompt_service.dart';
 import '../services/llm_provider.dart';
+import '../models/llm_configs.dart';
 
 final systemPromptServiceProvider = Provider((ref) => SystemPromptService());
 
@@ -139,7 +140,8 @@ class GeneralSettings extends ConsumerWidget {
                             children: themeNames.asMap().entries.map((entry) {
                               return FItem(
                                 title: Text(entry.value),
-                                suffix: currentIndex == entry.key ? Icon(Icons.check, size: 16, color: Theme.of(context).colorScheme.primary) : null, onPress: () {
+                                suffix: currentIndex == entry.key ? Icon(Icons.check, size: 16, color: Theme.of(context).colorScheme.primary) : null,
+                                onPress: () {
                                   ref.read(currentThemeIndexProvider.notifier).set(entry.key);
                                 },
                               );
@@ -179,75 +181,25 @@ class GeneralSettings extends ConsumerWidget {
 class LLMSettings extends ConsumerWidget {
   const LLMSettings({super.key});
 
-  void _showConfigDialog(BuildContext context, WidgetRef ref, {LLMConfig? existingConfig}) {
-    final nameController = TextEditingController(text: existingConfig?.name);
-    final modelController = TextEditingController(text: existingConfig?.model);
-    final urlController = TextEditingController(text: existingConfig?.baseUrl);
-    final keyController = TextEditingController(text: existingConfig?.apiKey);
-    final extraBodyController = TextEditingController(text: existingConfig?.extraBodyJson ?? '');
-    final temperatureController = TextEditingController(text: existingConfig?.temperature?.toString() ?? '');
-    bool supportsVisionLocal = existingConfig?.supportsVision ?? false;
-    bool supportsImageGenLocal = existingConfig?.supportsImageGen ?? false;
-    
-    // Track original name to handle renames
-    final originalName = existingConfig?.name;
+  void _showProviderDialog(BuildContext context, WidgetRef ref, {ProviderConfig? existing}) {
+    final nameController = TextEditingController(text: existing?.name);
+    final baseUrlController = TextEditingController(text: existing?.baseUrl);
+    final apiKeyController = TextEditingController(text: existing?.apiKey);
+    final originalName = existing?.name;
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(existingConfig == null ? '添加模型' : '编辑模型'),
-        content: StatefulBuilder(
-          builder: (context, setDialogState) => SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                FTextField(controller: nameController, hint: '显示名称 (Name)'),
-                const SizedBox(height: 8),
-                FTextField(controller: modelController, hint: '模型ID (Model ID)'),
-                const SizedBox(height: 8),
-                FTextField(controller: urlController, hint: 'Base URL (e.g. https://api.openai.com/v1)'),
-                const SizedBox(height: 8),
-                FTextField(controller: keyController, hint: 'API Key', obscureText: true),
-                const SizedBox(height: 8),
-                FTextField(
-                  controller: extraBodyController,
-                  hint: 'Extra Body JSON (例如 {"reasoning": {"enabled": true}})',
-                  maxLines: 3,
-                ),
-                const SizedBox(height: 8),
-                FTextField(
-                  controller: temperatureController,
-                  hint: 'Temperature (0.0-2.0)',
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                ),
-                const SizedBox(height: 8),
-                SwitchListTile(
-                  title: const Text('支持图片识别'),
-                  subtitle: const Text('启用视觉模型 (VL) 支持图片输入'),
-                  value: supportsVisionLocal,
-                  onChanged: (value) {
-                    setDialogState(() {
-                      supportsVisionLocal = value;
-                    });
-                  },
-                  dense: true,
-                  visualDensity: VisualDensity.compact,
-                ),
-                SwitchListTile(
-                  title: const Text('支持图像生成'),
-                  subtitle: const Text('启用图像生成模型'),
-                  value: supportsImageGenLocal,
-                  onChanged: (value) {
-                    setDialogState(() {
-                      supportsImageGenLocal = value;
-                    });
-                  },
-                  dense: true,
-                  visualDensity: VisualDensity.compact,
-                ),
-              ],
-            ),
-          ),
+        title: Text(existing == null ? '添加提供商' : '编辑提供商'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            FTextField(controller: nameController, hint: '提供商名称 (e.g. deepseek)'),
+            const SizedBox(height: 8),
+            FTextField(controller: baseUrlController, hint: 'Base URL (e.g. https://api.deepseek.com/v1)'),
+            const SizedBox(height: 8),
+            FTextField(controller: apiKeyController, hint: 'API Key', obscureText: true),
+          ],
         ),
         actions: [
           Row(
@@ -260,44 +212,20 @@ class LLMSettings extends ConsumerWidget {
               const SizedBox(width: 12),
               FButton(
                 onPress: () {
-                  if (nameController.text.isNotEmpty &&
-                      modelController.text.isNotEmpty &&
-                      urlController.text.isNotEmpty &&
-                      keyController.text.isNotEmpty) {
-                    
-                    String? extraBodyJson;
-                    if (extraBodyController.text.trim().isNotEmpty) {
-                      extraBodyJson = extraBodyController.text.trim();
-                    }
-
-                    double? temperature;
-                    if (temperatureController.text.trim().isNotEmpty) {
-                      temperature = double.tryParse(temperatureController.text.trim());
-                      if (temperature == null || temperature < 0.0 || temperature > 2.0) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Temperature 必须在 0.0 到 2.0 之间')),
-                        );
-                        return;
-                      }
-                    }
-                    
-                    final newConfig = LLMConfig(
-                      name: nameController.text,
-                      model: modelController.text,
-                      baseUrl: urlController.text,
-                      apiKey: keyController.text,
-                      extraBodyJson: extraBodyJson,
-                      temperature: temperature,
-                      supportsVision: supportsVisionLocal,
-                      supportsImageGen: supportsImageGenLocal,
+                  if (nameController.text.isNotEmpty && baseUrlController.text.isNotEmpty && apiKeyController.text.isNotEmpty) {
+                    final newConfig = ProviderConfig(
+                      name: nameController.text.trim(),
+                      baseUrl: baseUrlController.text.trim(),
+                      apiKey: apiKeyController.text.trim(),
                     );
-
-                    // If editing and name changed, remove old one first
-                    if (existingConfig != null && originalName != newConfig.name && originalName != null) {
-                       ref.read(configProvider.notifier).removeModel(originalName);
+                    if (existing != null && originalName != null && originalName != newConfig.name) {
+                      ref.read(configProvider.notifier).removeProvider(originalName);
                     }
-
-                    ref.read(configProvider.notifier).addModel(newConfig);
+                    if (existing == null) {
+                      ref.read(configProvider.notifier).addProvider(newConfig);
+                    } else {
+                      ref.read(configProvider.notifier).updateProvider(newConfig.name, newConfig);
+                    }
                     Navigator.of(context).pop();
                   }
                 },
@@ -310,12 +238,125 @@ class LLMSettings extends ConsumerWidget {
     );
   }
 
+  void _showModelDialog(BuildContext context, WidgetRef ref, String providerName, {ModelConfig? existing}) {
+    final nameController = TextEditingController(text: existing?.name);
+    final modelIdController = TextEditingController(text: existing?.modelId);
+    final tempController = TextEditingController(text: existing?.temperature?.toString() ?? '');
+    Set<ModelType> selectedTypes = existing?.types ?? {ModelType.llm};
+    bool isEnabledLocal = existing?.isEnabled ?? true;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: Text(existing == null ? '添加模型' : '编辑模型'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FTextField(controller: nameController, hint: '模型名称 (e.g. deepseek-chat)'),
+                const SizedBox(height: 8),
+                FTextField(controller: modelIdController, hint: '模型 ID (e.g. deepseek-chat)'),
+                const SizedBox(height: 8),
+                FTextField(
+                  controller: tempController,
+                  hint: 'Temperature (0.0-2.0)',
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                ),
+                const SizedBox(height: 8),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: ModelType.values.map((type) => CheckboxListTile(
+                    title: Text(type.name.toUpperCase()),
+                    value: selectedTypes.contains(type),
+                    onChanged: (bool? value) {
+                      setState(() {
+                        if (value == true) {
+                          selectedTypes.add(type);
+                        } else {
+                          selectedTypes.remove(type);
+                        }
+                      });
+                    },
+                    controlAffinity: ListTileControlAffinity.leading,
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                  )).toList(),
+                ),
+                const SizedBox(height: 8),
+                CheckboxListTile(
+                  title: const Text('启用模型'),
+                  value: isEnabledLocal,
+                  onChanged: (bool? value) {
+                    setState(() {
+                      isEnabledLocal = value ?? true;
+                    });
+                  },
+                  controlAffinity: ListTileControlAffinity.leading,
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                FButton(
+                  onPress: () => Navigator.of(context).pop(),
+                  child: const Text('取消'),
+                ),
+                const SizedBox(width: 12),
+                FButton(
+                  onPress: () {
+                    double? temperature;
+                    if (tempController.text.trim().isNotEmpty) {
+                      temperature = double.tryParse(tempController.text.trim());
+                      if (temperature == null || temperature < 0.0 || temperature > 2.0) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Temperature 必须在 0.0 到 2.0 之间')),
+                        );
+                        return;
+                      }
+                    }
+                    if (selectedTypes.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('必须选择至少一种模型类型')),
+                      );
+                      return;
+                    }
+                    if (nameController.text.isNotEmpty && modelIdController.text.isNotEmpty) {
+                      final newModel = ModelConfig(
+                        name: nameController.text.trim(),
+                        modelId: modelIdController.text.trim(),
+                        temperature: temperature,
+                        types: selectedTypes,
+                        isEnabled: isEnabledLocal,
+                      );
+                      if (existing != null) {
+                        ref.read(configProvider.notifier).updateModel(providerName, existing.name, newModel);
+                      } else {
+                        ref.read(configProvider.notifier).addModel(providerName, newModel);
+                      }
+                      Navigator.of(context).pop();
+                    }
+                  },
+                  child: const Text('保存'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _handleExport(BuildContext context, WidgetRef ref) async {
     try {
       final jsonData = ref.read(configProvider.notifier).exportToJson();
       final jsonString = const JsonEncoder.withIndent('  ').convert(jsonData);
       
-      // Let user choose where to save the file
       final outputPath = await FilePicker.platform.saveFile(
         dialogTitle: '保存配置文件',
         fileName: 'llm_config_export.json',
@@ -355,80 +396,77 @@ class LLMSettings extends ConsumerWidget {
       final jsonString = await file.readAsString();
       final jsonData = jsonDecode(jsonString) as Map<String, dynamic>;
       
-      // Show merge/overwrite dialog
-      if (context.mounted) {
-        final shouldMerge = await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('导入模式'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('请选择如何导入配置：'),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: FButton(
-                        onPress: () => Navigator.pop(context, true),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.merge_type, size: 32),
-                            const SizedBox(height: 8),
-                            const Text('合并', style: TextStyle(fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 4),
-                            Text(
-                              '保留现有配置\n添加新配置',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7)),
-                            ),
-                          ],
-                        ),
+      final shouldMerge = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('导入模式'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('请选择如何导入配置：'),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: FButton(
+                      onPress: () => Navigator.pop(context, true),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.merge_type, size: 32),
+                          const SizedBox(height: 8),
+                          const Text('合并', style: TextStyle(fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 4),
+                          Text(
+                            '保留现有配置\n添加新配置',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7)),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: FButton(
-                        onPress: () => Navigator.pop(context, false),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.refresh, size: 32),
-                            const SizedBox(height: 8),
-                            const Text('覆盖', style: TextStyle(fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 4),
-                            Text(
-                              '删除现有配置\n仅使用导入',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7)),
-                            ),
-                          ],
-                        ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: FButton(
+                      onPress: () => Navigator.pop(context, false),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.refresh, size: 32),
+                          const SizedBox(height: 8),
+                          const Text('覆盖', style: TextStyle(fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 4),
+                          Text(
+                            '删除现有配置\n仅使用导入',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7)),
+                          ),
+                        ],
                       ),
                     ),
-                  ],
-                ),
-              ],
-            ),
-            actions: [
-              FButton(
-                onPress: () => Navigator.pop(context),
-                child: const Text('取消'),
+                  ),
+                ],
               ),
             ],
           ),
-        );
+          actions: [
+            FButton(
+              onPress: () => Navigator.pop(context),
+              child: const Text('取消'),
+            ),
+          ],
+        ),
+      );
+      
+      if (shouldMerge != null) {
+        await ref.read(configProvider.notifier).importFromJson(jsonData, merge: shouldMerge);
         
-        if (shouldMerge != null) {
-          await ref.read(configProvider.notifier).importFromJson(jsonData, merge: shouldMerge);
-          
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(shouldMerge ? '配置已合并' : '配置已覆盖')),
-            );
-          }
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(shouldMerge ? '配置已合并' : '配置已覆盖')),
+          );
         }
       }
     } catch (e) {
@@ -446,8 +484,8 @@ class LLMSettings extends ConsumerWidget {
     final theme = FTheme.of(context);
 
     return configsAsync.when(
-      data: (configs) {
-        final list = configs.values.toList();
+      data: (providers) {
+        final providerList = providers.values.toList();
         return Padding(
           padding: const EdgeInsets.all(12.0),
           child: Column(
@@ -456,11 +494,11 @@ class LLMSettings extends ConsumerWidget {
               Row(
                 children: [
                   SizedBox(
-                    width: 90,
+                    width: 120,
                     child: TextButton.icon(
-                      onPressed: () => _showConfigDialog(context, ref),
+                      onPressed: () => _showProviderDialog(context, ref),
                       icon: const Icon(Icons.add, size: 16),
-                      label: const Text('添加'),
+                      label: const Text('添加提供商'),
                       style: TextButton.styleFrom(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         minimumSize: Size.zero,
@@ -485,88 +523,131 @@ class LLMSettings extends ConsumerWidget {
               ),
               const SizedBox(height: 16),
               Expanded(
-                child: ListView.separated(
-                  itemCount: list.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  itemBuilder: (context, index) {
-                    final config = list[index];
-                    return FCard(
-                      child: Padding(
-                        padding: const EdgeInsets.all(12.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    config.name,
-                                    style: FTheme.of(context).typography.lg.copyWith(fontWeight: FontWeight.bold),
-                                    overflow: TextOverflow.ellipsis,
+                child: providerList.isEmpty
+                    ? const Center(child: Text('暂无提供商配置，点击“添加提供商”开始'))
+                    : ListView.separated(
+                        itemCount: providerList.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 12),
+                        itemBuilder: (context, index) {
+                          final provider = providerList[index];
+                          return FCard(
+                            child: Padding(
+                              padding: const EdgeInsets.all(16.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          provider.name,
+                                          style: theme.typography.lg.copyWith(fontWeight: FontWeight.bold),
+                                        ),
+                                      ),
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          FButton.icon(
+                                            onPress: () => _showProviderDialog(context, ref, existing: provider),
+                                            child: const Icon(Icons.edit, size: 16),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          FButton.icon(
+                                            onPress: () {
+                                              ref.read(configProvider.notifier).removeProvider(provider.name);
+                                            },
+                                            child: const Icon(Icons.delete, size: 16),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          SizedBox(
+                                            width: 100,
+                                            child: TextButton.icon(
+                                              onPressed: () => _showModelDialog(context, ref, provider.name),
+                                              icon: const Icon(Icons.add, size: 16),
+                                              label: const Text('添加模型'),
+                                              style: TextButton.styleFrom(
+                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                minimumSize: Size.zero,
+                                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
                                   ),
-                                ),
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Checkbox(
-                                      value: config.isEnabled,
-                                      onChanged: (value) {
-                                        ref.read(configProvider.notifier).toggleModel(config.name);
-                                      },
-                                      visualDensity: VisualDensity.compact,
-                                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                      side: BorderSide.none,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Checkbox(
-                                      value: config.supportsVision,
-                                      onChanged: (value) {
-                                        ref.read(configProvider.notifier).toggleSupportsVision(config.name);
-                                      },
-                                      visualDensity: VisualDensity.compact,
-                                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                      side: BorderSide.none,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Checkbox(
-                                      value: config.supportsImageGen,
-                                      onChanged: (value) {
-                                        ref.read(configProvider.notifier).toggleSupportsImageGen(config.name);
-                                      },
-                                      visualDensity: VisualDensity.compact,
-                                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                      side: BorderSide.none,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    FButton.icon(
-                                      onPress: () => _showConfigDialog(context, ref, existingConfig: config),
-                                      child: const Icon(Icons.edit, size: 16),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    FButton.icon(
-                                      onPress: () {
-                                        ref.read(configProvider.notifier).removeModel(config.name);
-                                      },
-                                      child: const Icon(Icons.delete, size: 16),
-                                    ),
-                                  ],
-                                ),
-                              ],
+                                  const SizedBox(height: 8),
+                                  Text('Base URL: ${provider.baseUrl}', style: theme.typography.sm),
+                                  Text('API Key: ${provider.apiKey.length > 10 ? provider.apiKey.substring(0, 10) + '...' : provider.apiKey}', style: theme.typography.sm),
+                                  const SizedBox(height: 16),
+                                  Text('模型列表:', style: theme.typography.sm.copyWith(fontWeight: FontWeight.bold)),
+                                  const SizedBox(height: 8),
+                                  provider.models.isEmpty
+                                      ? const Padding(
+                                          padding: EdgeInsets.all(16.0),
+                                          child: Text('暂无模型，点击“添加模型”'),
+                                        )
+                                      : ListView.separated(
+                                          shrinkWrap: true,
+                                          physics: const NeverScrollableScrollPhysics(),
+                                          itemCount: provider.models.length,
+                                          separatorBuilder: (_, __) => const SizedBox(height: 8),
+                                          itemBuilder: (context, mIndex) {
+                                            final model = provider.models[mIndex];
+                                            return Container(
+                                              padding: const EdgeInsets.all(12),
+                                              decoration: BoxDecoration(
+                                                color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
+                                                borderRadius: BorderRadius.circular(8),
+                                              ),
+                                              child: Row(
+                                                children: [
+                                                  Expanded(
+                                                    flex: 2,
+                                                    child: Column(
+                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                      children: [
+                                                        Text(model.name, style: theme.typography.base.copyWith(fontWeight: FontWeight.w500)),
+                                                        Text('ID: ${model.modelId}', style: theme.typography.sm),
+                                                        if (model.temperature != null) Text('Temp: ${model.temperature}', style: theme.typography.sm),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                  Wrap(
+                                                    spacing: 4.0,
+                                                    runSpacing: 4.0,
+                                                    children: model.types.map((t) => Chip(
+                                                      label: Text(t.name.toUpperCase()),
+                                                      backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                                                    )).toList(),
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  Checkbox(
+                                                    value: model.isEnabled,
+                                                    onChanged: (_) => ref.read(configProvider.notifier).toggleModelEnabled(provider.name, model.name),
+                                                    visualDensity: VisualDensity.compact,
+                                                  ),
+                                                  FButton.icon(
+                                                    onPress: () => _showModelDialog(context, ref, provider.name, existing: model),
+                                                    child: const Icon(Icons.edit, size: 16),
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  FButton.icon(
+                                                    onPress: () => ref.read(configProvider.notifier).removeModel(provider.name, model.name),
+                                                    child: const Icon(Icons.delete, size: 16),
+                                                  ),
+                                                ],
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                ],
+                              ),
                             ),
-                            const SizedBox(height: 4),
-                            Text('Model: ${config.model}', style: theme.typography.sm),
-                            Text('URL: ${config.baseUrl}', style: theme.typography.sm),
-                            if (config.temperature != null)
-                              Text('Temperature: ${config.temperature}', style: theme.typography.sm),
-                            if (config.extraBodyJson != null && config.extraBodyJson!.isNotEmpty)
-                              Text('Extra Body: ${config.extraBodyJson!.length > 30 ? config.extraBodyJson!.substring(0, 30) + '...' : config.extraBodyJson!}', style: theme.typography.sm),
-                          ],
-                        ),
+                          );
+                        },
                       ),
-                    );
-                  },
-                ),
               ),
             ],
           ),
@@ -577,6 +658,8 @@ class LLMSettings extends ConsumerWidget {
     );
   }
 }
+
+// SystemPromptSettings remains the same as before
 class SystemPromptSettings extends ConsumerStatefulWidget {
   const SystemPromptSettings({super.key});
 
@@ -649,7 +732,6 @@ class _SystemPromptSettingsState extends ConsumerState<SystemPromptSettings> {
     try {
       final markdown = prompt.toMarkdown();
       
-      // Let user choose where to save the file
       final outputPath = await FilePicker.platform.saveFile(
         dialogTitle: '导出系统提示词',
         fileName: '${prompt.name}.md',
