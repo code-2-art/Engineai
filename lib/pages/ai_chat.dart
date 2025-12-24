@@ -6,7 +6,7 @@ import '../theme/theme.dart';
 import '../services/llm_provider.dart';
 import '../models/chat_session.dart';
 import '../services/session_provider.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
