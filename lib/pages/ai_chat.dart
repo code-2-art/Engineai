@@ -713,7 +713,7 @@ class _AiChatState extends ConsumerState<AiChat> {
                                             },
                                             ),
                                             ...prompts.map((p) => FItem(
-                                              title: Text(p.name), suffix: currentPrompt == p.content ? Icon(Icons.check, size: 16, color: Theme.of(context).colorScheme.primary) : null, onPress: () async {
+                                              title: Text(p.name), subtitle: Text(p.content, maxLines: 1, overflow: TextOverflow.ellipsis), suffix: currentPrompt == p.content ? Icon(Icons.check, size: 16, color: Theme.of(context).colorScheme.primary) : null, onPress: () async {
                                                 var sid = ref.read(currentSessionIdProvider);
                                                 if (sid == null) {
                                                   final session = await ref.read(sessionListProvider.notifier).createNewSession();

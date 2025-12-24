@@ -29,7 +29,7 @@
    - **响应**:
      - 流式：`data: {"choices": [{"delta": {"content": "..."}}]}` 或 `{"error": "..."}`
      - 非流式：JSON 对象。
-
+   - **测试示例** (`test/post.py:57-75`): 非流式调用 "Deepseek-V3"，打印响应。
    ```python
    payload = {"model": "Deepseek-V3", "messages": [{"role": "user", "content": "你好"}], "stream": False}
    ```
@@ -100,7 +100,7 @@ graph TD
    - **curl 示例**（流式）:
      ```bash
      curl -X POST "http://localhost:8080/v1/chat/completions" \
-       -H "X-API-Key: ***" \
+       -H "X-API-Key: 12395da9dfda7453d6dc6f885f23fb23" \
        -H "X-API-Timestamp: $(date +%s)" \
        -H "Content-Type: application/json" \
        -d '{
@@ -116,7 +116,7 @@ graph TD
      ```python
      import requests, time, json
      BASE_URL = "http://localhost:8080"
-     API_KEY = "***"
+     API_KEY = "12395da9dfda7453d6dc6f885f23fb23"
 
      def get_headers():
          return {"X-API-Key": API_KEY, "X-API-Timestamp": str(int(time.time())), "Content-Type": "application/json"}
@@ -136,7 +136,7 @@ graph TD
    - **curl 示例**:
      ```bash
      curl -X GET "http://localhost:8080/v1/models" \
-       -H "X-API-Key: ***" \
+       -H "X-API-Key: 12395da9dfda7453d6dc6f885f23fb23" \
        -H "X-API-Timestamp: $(date +%s)"
      ```
      - 响应: `{"Deepseek-V3": {...}, ...}`
@@ -152,7 +152,7 @@ graph TD
    - **curl 示例**:
      ```bash
      curl -X GET "http://localhost:8080/v1/promptmp" \
-       -H "X-API-Key: ***" \
+       -H "X-API-Key: 12395da9dfda7453d6dc6f885f23fb23" \
        -H "X-API-Timestamp: $(date +%s)"
      ```
      - 响应: `{"writing_styles": {"日常": ...}, "prompt_map": {...}}`
@@ -168,7 +168,7 @@ graph TD
    - **curl 示例**:
      ```bash
      curl -X POST "http://localhost:8080/v1/clear_memory" \
-       -H "X-API-Key: ***" \
+       -H "X-API-Key: 12395da9dfda7453d6dc6f885f23fb23" \
        -H "X-API-Timestamp: $(date +%s)" \
        -H "Content-Type: application/json" \
        -d '{"model": "Deepseek-V3"}'
