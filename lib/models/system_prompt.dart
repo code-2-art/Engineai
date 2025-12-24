@@ -6,6 +6,8 @@ class SystemPrompt {
   final String content;
   final DateTime createdAt;
   final bool isEnabled;
+  final bool isBuiltin;
+  final String? path;
 
   SystemPrompt({
     String? id,
@@ -13,6 +15,8 @@ class SystemPrompt {
     required this.content,
     DateTime? createdAt,
     this.isEnabled = true,
+    this.isBuiltin = false,
+    this.path,
   })  : id = id ?? const Uuid().v4(),
         createdAt = createdAt ?? DateTime.now();
 
@@ -23,6 +27,8 @@ class SystemPrompt {
       content: json['content'] as String,
       createdAt: DateTime.parse(json['createdAt'] as String),
       isEnabled: json['isEnabled'] as bool? ?? true,
+      isBuiltin: json['isBuiltin'] as bool? ?? false,
+      path: json['path'] as String?,
     );
   }
 
@@ -33,6 +39,8 @@ class SystemPrompt {
       'content': content,
       'createdAt': createdAt.toIso8601String(),
       'isEnabled': isEnabled,
+      'isBuiltin': isBuiltin,
+      'path': path,
     };
   }
 
@@ -112,6 +120,8 @@ $content''';
     String? content,
     DateTime? createdAt,
     bool? isEnabled,
+    bool? isBuiltin,
+    String? path,
   }) {
     return SystemPrompt(
       id: id ?? this.id,
@@ -119,6 +129,8 @@ $content''';
       content: content ?? this.content,
       createdAt: createdAt ?? this.createdAt,
       isEnabled: isEnabled ?? this.isEnabled,
+      isBuiltin: isBuiltin ?? this.isBuiltin,
+      path: path ?? this.path,
     );
   }
 }
