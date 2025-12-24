@@ -6,7 +6,6 @@ import 'ai_chat.dart';
 import 'package:forui/forui.dart';
 import 'dart:async';
 import 'dart:io';
-import 'package:path_provider/path_provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 class WritingPage extends ConsumerStatefulWidget {
@@ -22,7 +21,6 @@ class _WritingPageState extends ConsumerState<WritingPage> {
   String? _savePath;
   DateTime? _lastSaved;
   Timer? _saveTimer;
-  String? _saveStatus;
   late SharedPreferences _prefs;
 
   @override
@@ -43,41 +41,33 @@ class _WritingPageState extends ConsumerState<WritingPage> {
   Future<void> _initPrefs() async {
     _prefs = await SharedPreferences.getInstance();
     _savePath = _prefs.getString('writing_save_path');
-    if (_savePath == null) {
-      final dir = await getApplicationDocumentsDirectory();
-      _savePath = '\${dir.path}\${Platform.path.separator}writing.md';
-      await _prefs.setString('writing_save_path', _savePath!);
-    }
     if (mounted) {
       setState(() {});
     }
-    _saveTimer = Timer.periodic(const Duration(seconds: 2), (_) => _autoSave());
+    _saveTimer = Timer.periodic(const Duration(seconds: 3), (_) => _autoSave());
   }
 
 
   Future<void> _autoSave() async {
     if (_savePath == null || !mounted) return;
-    _saveStatus = null;
     try {
       final buffer = StringBuffer();
       void traverse(Node? node) {
         if (node == null) return;
         buffer.write(node.delta?.toPlainText() ?? '');
-        buffer.write('\n\n');
         for (final child in node.children) {
           traverse(child);
         }
       }
       traverse(editorState.document.root);
-      final md = buffer.toString().trim();
+      final md = buffer.toString();
       await File(_savePath!).writeAsString(md);
-      _lastSaved = DateTime.now();
-      _saveStatus = '保存成功';
+      if (mounted) {
+        _lastSaved = DateTime.now();
+        setState(() {});
+      }
     } catch (e) {
-      _saveStatus = '保存失败: $e';
-    }
-    if (mounted) {
-      setState(() {});
+      print('保存失败: $e');
     }
   }
 
@@ -86,7 +76,7 @@ class _WritingPageState extends ConsumerState<WritingPage> {
     if (dirPath != null && mounted) {
       _savePath = '$dirPath/writing.md';
       await _prefs.setString('writing_save_path', _savePath!);
-      _autoSave();
+      await _autoSave();
       setState(() {});
     }
   }
@@ -120,41 +110,19 @@ class _WritingPageState extends ConsumerState<WritingPage> {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.save),
-                              onPressed: _autoSave,
-                              tooltip: '手动保存',
-                            ),
-                            const SizedBox(width: 4),
-                            IconButton(
-                              icon: const Icon(Icons.folder_open),
-                              onPressed: _selectSaveDir,
-                              tooltip: '选择保存文件夹',
-                            ),
-                            if (_lastSaved != null)
-                              Padding(
-                                padding: const EdgeInsets.only(right: 4.0),
-                                child: Text(
-                                  '保存于: ${_lastSaved!.toLocal().toString().substring(5, 16)}',
-                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.green),
-                                ),
-                              ),
-                            if (_saveStatus != null && _saveStatus!.contains('失败'))
-                              Padding(
-                                padding: const EdgeInsets.only(right: 8.0),
-                                child: Text(
-                                  _saveStatus!,
-                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: Colors.red,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ),
-                          ],
+                        IconButton(
+                          icon: const Icon(Icons.folder_open),
+                          onPressed: _selectSaveDir,
+                          tooltip: '选择保存文件夹',
                         ),
+                        if (_lastSaved != null)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8.0),
+                            child: Text(
+                              '保存于: ${_lastSaved!.toLocal().toString().substring(5, 16)}',
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.green),
+                            ),
+                          ),
                       ],
                     ),
                   ),
