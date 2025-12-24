@@ -15,9 +15,7 @@ import 'package:flutter/foundation.dart';
 import 'dart:typed_data';
 import 'dart:convert';
 import 'package:flutter/services.dart';
-import 'settings_page.dart' hide systemPromptsProvider, enabledSystemPromptsProvider;
-import '../providers/prompt_providers.dart';
-import '../providers/prompt_providers.dart';
+import 'settings_page.dart';
 import '../models/system_prompt.dart';
 
 final currentResponseProvider = StateProvider<String>((ref) => '');

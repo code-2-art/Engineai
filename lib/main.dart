@@ -6,6 +6,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'pages/ai_chat.dart';
 import 'pages/settings_page.dart';
 import 'pages/image_page.dart';
+import 'pages/writing_page.dart';
 import 'services/llm_provider.dart';
 import 'services/session_provider.dart';
 import 'models/chat_session.dart';
@@ -113,6 +114,15 @@ class Application extends ConsumerWidget {
                               },
                             ),
                           ),
+                          Padding(
+                            padding: EdgeInsets.zero,
+                            child: IconButton(
+                              icon: const Icon(Icons.edit_note_outlined, size: 18),
+                              onPressed: () {
+                                ref.read(currentPageProvider.notifier).state = 'writing';
+                              },
+                            ),
+                          ),
                           const Spacer(), // 预留中间空间
                           Padding(
                             padding: EdgeInsets.zero,
@@ -143,6 +153,8 @@ class Application extends ConsumerWidget {
                             pageWidget = const AiChat();
                           } else if (page == 'image') {
                             pageWidget = const ImagePage();
+                          } else if (page == 'writing') {
+                            pageWidget = const WritingPage();
                           }
                           return GestureDetector(
                             onTap: () {
