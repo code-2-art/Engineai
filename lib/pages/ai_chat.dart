@@ -235,36 +235,33 @@ class _AiChatState extends ConsumerState<AiChat> {
     if (sessionId == null) return;
     final session = ref.read(sessionListProvider).firstWhere((s) => s.id == sessionId);
     if (session.messages.isEmpty) return;
-
+  
     final md = ref.read(chatHistoryServiceProvider).convertToMarkdown(session);
-    
-    if (kIsWeb || !Platform.isMacOS) {
-      await Share.share(md, subject: '${session.title}.md');
-    } else {
-      String? outputFile = await FilePicker.platform.saveFile(
-        dialogTitle: '请选择保存位置',
-        fileName: '${session.title}.md',
-        type: FileType.any,
-      );
-
-      if (outputFile != null) {
-        final file = File(outputFile);
-        await file.writeAsString(md);
-        if (mounted) {
-          showDialog(
-            context: context,
-            builder: (context) => AlertDialog(
-              title: const Text('导出成功'),
-              content: Text('已保存到: ${file.path}'),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('确定'),
-                ),
-              ],
-            ),
-          );
-        }
+    final safeName = session.title.replaceAll(RegExp(r'[<>:"/\\|?*\x00-\x1F]'), '_');
+    String? outputFile = await FilePicker.platform.saveFile(
+      dialogTitle: '保存聊天记录',
+      fileName: '${safeName}.md',
+      type: FileType.custom,
+      allowedExtensions: ['md'],
+    );
+  
+    if (outputFile != null) {
+      final file = File(outputFile);
+      await file.writeAsString(md);
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('导出成功'),
+            content: Text('已保存到: ${file.path}'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('确定'),
+              ),
+            ],
+          ),
+        );
       }
     }
   }
@@ -491,11 +488,15 @@ class _AiChatState extends ConsumerState<AiChat> {
                                             final textColor = message.isUser
                                               ? colorScheme.onPrimaryContainer
                                               : colorScheme.onSecondaryContainer;
-                                            final codeBgColor = colorScheme.surfaceVariant;
+                                            final isDark = Theme.of(context).brightness == Brightness.dark;
+                                            final config = isDark
+                                                ? MarkdownConfig.darkConfig
+                                                : MarkdownConfig.defaultConfig;
                                             return DefaultTextStyle(
                                               style: TextStyle(color: textColor),
                                               child: MarkdownWidget(
                                                 data: displayText,
+                                                config: config,
                                                 selectable: true,
                                                 shrinkWrap: true,
                                                 physics: const NeverScrollableScrollPhysics(),

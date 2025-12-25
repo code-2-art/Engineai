@@ -176,25 +176,22 @@ class _HistoryListState extends ConsumerState<HistoryList> {
     );
   }
 
-  void _exportToMarkdown(BuildContext context, WidgetRef ref, ChatSession session) {
+  void _exportToMarkdown(BuildContext context, WidgetRef ref, ChatSession session) async {
     final md = ref.read(chatHistoryServiceProvider).convertToMarkdown(session);
-    if (kIsWeb || !Platform.isMacOS) {
-      Share.share(md, subject: '${session.title}.md');
-    } else {
-      FilePicker.platform.saveFile(
-        dialogTitle: '导出 Markdown',
-        fileName: '${session.title}.md',
-        type: FileType.custom,
-        allowedExtensions: ['md'],
-      ).then((outputFile) {
-        if (outputFile != null && context.mounted) {
-          File(outputFile).writeAsString(md).then((_) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('导出成功: $outputFile')),
-            );
-          });
-        }
-      });
+    final safeName = session.title.replaceAll(RegExp(r'[<>:"/\\|?*\x00-\x1F]'), '_');
+    String? outputFile = await FilePicker.platform.saveFile(
+      dialogTitle: '保存聊天记录',
+      fileName: '${safeName}.md',
+      type: FileType.custom,
+      allowedExtensions: ['md'],
+    );
+    if (outputFile != null && context.mounted) {
+      await File(outputFile).writeAsString(md);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('导出成功，已保存到: $outputFile')),
+        );
+      }
     }
   }
 }
