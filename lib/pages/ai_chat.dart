@@ -6,7 +6,7 @@ import '../theme/theme.dart';
 import '../services/llm_provider.dart';
 import '../models/chat_session.dart';
 import '../services/session_provider.dart';
-import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
+import 'package:markdown_widget/markdown_widget.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
@@ -485,19 +485,25 @@ class _AiChatState extends ConsumerState<AiChat> {
                                             ),
                                           ],
                                         ),
-                                        child: MarkdownBody(
-                                          data: displayText,
-                                          selectable: true,
-                                          styleSheet: MarkdownStyleSheet(
-                                            p: TextStyle(
-                                              fontSize: 14,
-                                              height: 1.5,
-                                              color: message.isUser ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSecondaryContainer,
-                                              fontFamilyFallback: const ['Microsoft YaHei', 'SimSun', 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans CJK SC', 'Arial Unicode MS'],
-                                            ),
-                                          ),
+                                        child: Builder(
+                                          builder: (context) {
+                                            final colorScheme = Theme.of(context).colorScheme;
+                                            final textColor = message.isUser
+                                              ? colorScheme.onPrimaryContainer
+                                              : colorScheme.onSecondaryContainer;
+                                            final codeBgColor = colorScheme.surfaceVariant;
+                                            return DefaultTextStyle(
+                                              style: TextStyle(color: textColor),
+                                              child: MarkdownWidget(
+                                                data: displayText,
+                                                selectable: true,
+                                                shrinkWrap: true,
+                                                physics: const NeverScrollableScrollPhysics(),
+                                              ),
+                                            );
+                                          },
                                         ),
-                                        ),
+                                      ),
                                       _buildImagePreview(message),
                                       const SizedBox(height: 4),
                                       Row(
