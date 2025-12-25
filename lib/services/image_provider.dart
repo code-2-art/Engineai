@@ -85,7 +85,7 @@ class CustomImageGenerator implements ImageGenerator {
     );
 
     print('ImageGenerator: Response status: ${response.statusCode}');
-    print('ImageGenerator: Response body: ${response.body}');
+    print('ImageGenerator: Response body preview: ${response.body.length < 500 ? response.body : response.body.substring(0, 500)}...');
 
     if (response.statusCode == 200) {
       final data = json.decode(response.body);
@@ -142,7 +142,7 @@ class CustomImageGenerator implements ImageGenerator {
         return ImageGenerationResult(imageBytes: imageBytes, description: description);
       }
     }
-    print('ImageGenerator: HTTP Error ${response.statusCode}: ${response.body}');
+    print('ImageGenerator: HTTP Error ${response.statusCode}: ${response.body.length < 500 ? response.body : response.body.substring(0, 500)}...');
     throw Exception('图像生成失败: HTTP ${response.statusCode}\n${response.body}');
   }
 }

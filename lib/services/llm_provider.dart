@@ -28,7 +28,6 @@ class OpenAILLMProvider implements LLMProvider {
   static Stream<String> parseSSE(Stream<List<int>> byteStream) async* {
     final decoder = const Utf8Decoder();
     final splitter = const LineSplitter();
-    print('LLMProvider: Starting SSE parse...');
     try {
       await for (final line in byteStream.transform(decoder).transform(splitter)) {
         if (line.isEmpty) continue;
@@ -52,7 +51,6 @@ class OpenAILLMProvider implements LLMProvider {
       print('LLMProvider: Byte stream error: $e');
       rethrow;
     }
-    print('LLMProvider: SSE parse finished.');
   }
 
   String _normalizeUrl(String url) {
@@ -194,11 +192,8 @@ class ConfigNotifier extends AsyncNotifier<Map<String, ProviderConfig>> {
 
   @override
   Future<Map<String, ProviderConfig>> build() async {
-    print('ConfigNotifier: build() started');
     final data = await _storage.readConfig();
-    print('ConfigNotifier: config data read from storage');
     final providers = _parseProviders(data);
-    print('ConfigNotifier: ${providers.length} providers parsed');
     
     final defaultModel = data['defaultModel'] as String?;
     if (defaultModel != null && _isValidModel(providers, defaultModel)) {
@@ -208,10 +203,8 @@ class ConfigNotifier extends AsyncNotifier<Map<String, ProviderConfig>> {
         if (imageNotifier.state.isEmpty) {
           imageNotifier.setModel(defaultModel);
         }
-        print('ConfigNotifier: Default model updated for chat and image: $defaultModel');
       });
     }
-    print('ConfigNotifier: build() finished');
     return providers;
   }
 
@@ -365,11 +358,8 @@ final imageCurrentModelProvider = StateNotifierProvider<CurrentImageModelNotifie
 });
 
 final chatLlmProvider = FutureProvider<LLMProvider>((ref) async {
-  print('chatLlmProvider: initialization started');
   final currentModel = ref.watch(chatCurrentModelProvider);
-  print('chatLlmProvider: currentModel is $currentModel');
   final providers = await ref.watch(configProvider.future);
-  print('llmProvider: providers loaded, ${providers.length} entries');
   
   final parts = currentModel.split('/');
   if (parts.length != 2) {
@@ -385,7 +375,6 @@ final chatLlmProvider = FutureProvider<LLMProvider>((ref) async {
   if (model == null || !model.isEnabled) {
     throw Exception('Model "$modelName" not found or disabled in provider "$providerName"');
   }
-  print('llmProvider: using ${provider.name}/${model.name}');
   return OpenAILLMProvider(
     baseUrl: provider.baseUrl,
     apiKey: provider.apiKey,
