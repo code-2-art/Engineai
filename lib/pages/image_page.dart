@@ -478,7 +478,7 @@ class _ImagePageState extends ConsumerState<ImagePage> {
                                       padding: const EdgeInsets.all(10),
                                       decoration: BoxDecoration(
                                         color: Theme.of(context).colorScheme.primaryContainer,
-                                        borderRadius: BorderRadius.circular(18),
+                                        borderRadius: BorderRadius.circular(4),
                                         boxShadow: [
                                           BoxShadow(
                                             color: Colors.black.withOpacity(0.04),
@@ -558,7 +558,7 @@ class _ImagePageState extends ConsumerState<ImagePage> {
                                 ),
                                 decoration: BoxDecoration(
                                   color: Theme.of(context).colorScheme.secondaryContainer,
-                                  borderRadius: BorderRadius.circular(18),
+                                  borderRadius: BorderRadius.circular(4),
                                   boxShadow: [
                                     BoxShadow(
                                       color: Colors.black.withOpacity(0.04),
@@ -572,13 +572,13 @@ class _ImagePageState extends ConsumerState<ImagePage> {
                                     Padding(
                                       padding: const EdgeInsets.all(12),
                                       child: ClipRRect(
-                                        borderRadius: BorderRadius.circular(12),
+                                        borderRadius: BorderRadius.circular(4),
                                         child: msg.image.isEmpty
                                             ? Container(
                                                 height: 240,
                                                 decoration: BoxDecoration(
                                                   color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
-                                                  borderRadius: BorderRadius.circular(12),
+                                                  borderRadius: BorderRadius.circular(4),
                                                 ),
                                                 child: Center(
                                                   child: Column(
@@ -756,7 +756,7 @@ class _ImagePageState extends ConsumerState<ImagePage> {
                         },
                       ),
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(4),
                       ),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                     ),

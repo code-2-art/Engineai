@@ -324,7 +324,7 @@ class _AiChatState extends ConsumerState<AiChat> {
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(4),
                 child: GestureDetector(
                   onTap: () => _showImageViewer(bytes),
                   onDoubleTap: () => _showImageViewer(bytes),
@@ -473,7 +473,7 @@ class _AiChatState extends ConsumerState<AiChat> {
                                         padding: const EdgeInsets.all(10),
                                         decoration: BoxDecoration(
                                           color: message.isUser ? Theme.of(context).colorScheme.primaryContainer : Theme.of(context).colorScheme.secondaryContainer,
-                                          borderRadius: BorderRadius.circular(18),
+                                          borderRadius: BorderRadius.circular(4),
                                           boxShadow: [
                                             BoxShadow(
                                               color: Colors.black.withOpacity(0.04),
@@ -577,7 +577,7 @@ class _AiChatState extends ConsumerState<AiChat> {
                                   padding: const EdgeInsets.all(10),
                                   decoration: BoxDecoration(
                                     color: Theme.of(context).colorScheme.secondaryContainer,
-                                    borderRadius: BorderRadius.circular(20),
+                                    borderRadius: BorderRadius.circular(4),
                                     boxShadow: [
                                       BoxShadow(
                                         color: Colors.black.withOpacity(0.04),
@@ -626,7 +626,7 @@ class _AiChatState extends ConsumerState<AiChat> {
                             child: SizedBox(
                               width: 150,
                               child: ClipRRect(
-                                borderRadius: BorderRadius.circular(12),
+                                borderRadius: BorderRadius.circular(4),
                                 child: Stack(
                                   children: [
                                     Positioned.fill(
@@ -923,7 +923,7 @@ class _AiChatState extends ConsumerState<AiChat> {
                         },
                       ),
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(4),
                       ),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                     ),
