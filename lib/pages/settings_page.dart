@@ -13,12 +13,15 @@ import '../models/llm_configs.dart';
 
 final systemPromptServiceProvider = Provider((ref) => SystemPromptService());
 
-final systemPromptsProvider = FutureProvider<List<SystemPrompt>>((ref) async {
+final allSystemPromptsProvider = FutureProvider<List<SystemPrompt>>((ref) async {
   return await ref.watch(systemPromptServiceProvider).getAllPrompts();
+});
+final customPromptsProvider = FutureProvider<List<SystemPrompt>>((ref) async {
+  return await ref.watch(systemPromptServiceProvider).getCustomPrompts();
 });
 
 final enabledSystemPromptsProvider = FutureProvider<List<SystemPrompt>>((ref) async {
-  final prompts = await ref.watch(systemPromptsProvider.future);
+  final prompts = await ref.watch(allSystemPromptsProvider.future);
   return prompts.where((p) => p.isEnabled).toList();
 });
 
@@ -762,7 +765,7 @@ class _SystemPromptSettingsState extends ConsumerState<SystemPromptSettings> {
                       content: contentController.text,
                     ));
                   }
-                  ref.invalidate(systemPromptsProvider);
+                  ref.invalidate(customPromptsProvider);
                   if (mounted) Navigator.pop(context);
                 },
                 child: const Text('保存'),
@@ -819,7 +822,7 @@ class _SystemPromptSettingsState extends ConsumerState<SystemPromptSettings> {
       
       final service = ref.read(systemPromptServiceProvider);
       await service.addPrompt(prompt);
-      ref.invalidate(systemPromptsProvider);
+      ref.invalidate(customPromptsProvider);
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -837,7 +840,7 @@ class _SystemPromptSettingsState extends ConsumerState<SystemPromptSettings> {
 
   @override
   Widget build(BuildContext context) {
-    final promptsAsync = ref.watch(systemPromptsProvider);
+    final promptsAsync = ref.watch(customPromptsProvider);
     final theme = FTheme.of(context);
 
     return Padding(
@@ -908,7 +911,7 @@ class _SystemPromptSettingsState extends ConsumerState<SystemPromptSettings> {
                                       value: prompt.isEnabled,
                                       onChanged: (value) async {
                                         await ref.read(systemPromptServiceProvider).togglePrompt(prompt.id);
-                                        ref.invalidate(systemPromptsProvider);
+                                        ref.invalidate(customPromptsProvider);
                                       },
                                       visualDensity: VisualDensity.compact,
                                       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -953,7 +956,7 @@ class _SystemPromptSettingsState extends ConsumerState<SystemPromptSettings> {
 
                                         if (confirm == true) {
                                           await ref.read(systemPromptServiceProvider).deletePrompt(prompt.id);
-                                          ref.invalidate(systemPromptsProvider);
+                                          ref.invalidate(customPromptsProvider);
                                         }
                                       },
                                       child: const Icon(Icons.delete, size: 16),

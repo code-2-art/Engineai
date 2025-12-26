@@ -8,8 +8,9 @@ final chatHistoryServiceProvider = Provider((ref) => ChatHistoryService());
 
 class SessionNotifier extends StateNotifier<List<ChatSession>> {
   final ChatHistoryService _service;
+  final SharedPrefsService _prefsService;
 
-  SessionNotifier(this._service) : super([]) {
+  SessionNotifier(this._service, this._prefsService) : super([]) {
     _loadSessions();
   }
 
@@ -18,10 +19,12 @@ class SessionNotifier extends StateNotifier<List<ChatSession>> {
   }
 
   Future<ChatSession> createNewSession() async {
+    final String? defaultPrompt = _prefsService.getDefaultSystemPrompt();
     final session = ChatSession(
       id: const Uuid().v4(),
       title: '新对话',
       messages: [],
+      systemPrompt: defaultPrompt,
     );
     state = [session, ...state];
     await _service.saveSessions(state);
@@ -88,7 +91,7 @@ class SessionNotifier extends StateNotifier<List<ChatSession>> {
 }
 
 final sessionListProvider = StateNotifierProvider<SessionNotifier, List<ChatSession>>((ref) {
-  return SessionNotifier(ref.watch(chatHistoryServiceProvider));
+  return SessionNotifier(ref.watch(chatHistoryServiceProvider), ref.watch(sharedPrefsServiceProvider));
 });
 
 class CurrentSessionNotifier extends StateNotifier<String?> {

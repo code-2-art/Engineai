@@ -16,6 +16,7 @@ import 'dart:typed_data';
 import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'settings_page.dart';
+import '../services/shared_prefs_service.dart';
 import '../models/system_prompt.dart';
 
 final currentResponseProvider = StateProvider<String>((ref) => '');
@@ -724,11 +725,12 @@ class _AiChatState extends ConsumerState<AiChat> {
                                                 ref.read(currentSessionIdProvider.notifier).setSessionId(sid);
                                               }
                                               ref.read(sessionListProvider.notifier).updateSessionSystemPrompt(sid, null);
+                                              await ref.read(sharedPrefsServiceProvider).saveDefaultSystemPrompt(null);
                                               ref.invalidate(enabledSystemPromptsProvider);
                                             },
                                             ),
                                             ...prompts.map((p) => FItem(
-                                              title: Text(p.name), subtitle: Text(p.content, maxLines: 1, overflow: TextOverflow.ellipsis), suffix: currentPrompt == p.content ? Icon(Icons.check, size: 16, color: Theme.of(context).colorScheme.primary) : null, onPress: () async {
+                                              title: Text(p.name), suffix: currentPrompt == p.content ? Icon(Icons.check, size: 16, color: Theme.of(context).colorScheme.primary) : null, onPress: () async {
                                                 var sid = ref.read(currentSessionIdProvider);
                                                 if (sid == null) {
                                                   final session = await ref.read(sessionListProvider.notifier).createNewSession();
@@ -736,6 +738,7 @@ class _AiChatState extends ConsumerState<AiChat> {
                                                   ref.read(currentSessionIdProvider.notifier).setSessionId(sid);
                                                 }
                                                 ref.read(sessionListProvider.notifier).updateSessionSystemPrompt(sid, p.content);
+                                                await ref.read(sharedPrefsServiceProvider).saveDefaultSystemPrompt(p.content);
                                                 ref.invalidate(enabledSystemPromptsProvider);
                                               },
                                             )),

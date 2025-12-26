@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../models/system_prompt.dart';
+import '../models/prompt/prompt_map.dart';
 
 class SystemPromptService {
   static const String _boxName = 'system_prompts';
@@ -12,7 +13,7 @@ class SystemPromptService {
     return Hive.box(_boxName);
   }
 
-  Future<List<SystemPrompt>> getAllPrompts() async {
+  Future<List<SystemPrompt>> _getCustomPrompts() async {
     final box = await _getBox();
     final List<dynamic> rawList = box.get('prompts', defaultValue: []);
     return rawList.map((item) {
@@ -23,39 +24,52 @@ class SystemPromptService {
     }).toList();
   }
 
-  Future<void> savePrompts(List<SystemPrompt> prompts) async {
+  Future<void> _saveCustomPrompts(List<SystemPrompt> prompts) async {
     final box = await _getBox();
     final data = prompts.map((p) => p.toJson()).toList();
     await box.put('prompts', data);
   }
 
+  Future<List<SystemPrompt>> getCustomPrompts() async {
+    return await _getCustomPrompts();
+  }
+
+
+  Future<List<SystemPrompt>> getAllPrompts() async {
+    final predefined = getChatPromptMap().values.toList();
+    final customs = await _getCustomPrompts();
+    return [...predefined, ...customs];
+  }
+
+
   Future<void> addPrompt(SystemPrompt prompt) async {
-    final prompts = await getAllPrompts();
-    prompts.add(prompt);
-    await savePrompts(prompts);
+    final customs = await _getCustomPrompts();
+    customs.add(prompt);
+    await _saveCustomPrompts(customs);
   }
 
   Future<void> updatePrompt(SystemPrompt prompt) async {
-    final prompts = await getAllPrompts();
-    final index = prompts.indexWhere((p) => p.id == prompt.id);
+    final customs = await _getCustomPrompts();
+    final index = customs.indexWhere((p) => p.id == prompt.id);
     if (index != -1) {
-      prompts[index] = prompt;
-      await savePrompts(prompts);
+      customs[index] = prompt;
+      await _saveCustomPrompts(customs);
     }
   }
 
   Future<void> deletePrompt(String id) async {
-    final prompts = await getAllPrompts();
-    prompts.removeWhere((p) => p.id == id);
-    await savePrompts(prompts);
+    final customs = await _getCustomPrompts();
+    customs.removeWhere((p) => p.id == id);
+    await _saveCustomPrompts(customs);
   }
 
   Future<void> togglePrompt(String id) async {
-    final prompts = await getAllPrompts();
-    final index = prompts.indexWhere((p) => p.id == id);
+    final customs = await _getCustomPrompts();
+    final index = customs.indexWhere((p) => p.id == id);
     if (index != -1) {
-      prompts[index] = prompts[index].copyWith(isEnabled: !prompts[index].isEnabled);
-      await savePrompts(prompts);
+      customs[index] = customs[index].copyWith(isEnabled: !customs[index].isEnabled);
+      await _saveCustomPrompts(customs);
     }
   }
+
 }

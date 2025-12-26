@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
- // This provider will be overridden in main.dart with the initialized instance
+  // This provider will be overridden in main.dart with the initialized instance
 final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
   throw UnimplementedError();
 });
@@ -10,6 +10,7 @@ class SharedPrefsService {
   static const String _currentSessionIdKey = 'current_session_id';
   static const String _currentImageSessionIdKey = 'current_image_session_id';
   static const String _currentImageModelKey = 'current_image_model';
+  static const String _defaultSystemPromptKey = 'default_system_prompt';
 
   final SharedPreferences _prefs;
 
@@ -45,6 +46,18 @@ class SharedPrefsService {
 
   Future<void> saveCurrentImageModel(String model) async {
     await _prefs.setString(_currentImageModelKey, model);
+  }
+
+  String? getDefaultSystemPrompt() {
+    return _prefs.getString(_defaultSystemPromptKey);
+  }
+
+  Future<void> saveDefaultSystemPrompt(String? prompt) async {
+    if (prompt == null) {
+      await _prefs.remove(_defaultSystemPromptKey);
+    } else {
+      await _prefs.setString(_defaultSystemPromptKey, prompt);
+    }
   }
 }
 
