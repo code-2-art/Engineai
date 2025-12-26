@@ -11,19 +11,6 @@ import '../services/system_prompt_service.dart';
 import '../services/llm_provider.dart';
 import '../models/llm_configs.dart';
 
-final systemPromptServiceProvider = Provider((ref) => SystemPromptService());
-
-final allSystemPromptsProvider = FutureProvider<List<SystemPrompt>>((ref) async {
-  return await ref.watch(systemPromptServiceProvider).getAllPrompts();
-});
-final customPromptsProvider = FutureProvider<List<SystemPrompt>>((ref) async {
-  return await ref.watch(systemPromptServiceProvider).getCustomPrompts();
-});
-
-final enabledSystemPromptsProvider = FutureProvider<List<SystemPrompt>>((ref) async {
-  final prompts = await ref.watch(allSystemPromptsProvider.future);
-  return prompts.where((p) => p.isEnabled).toList();
-});
 
 enum SettingsSection {
   general('通用', Icons.tune),
@@ -752,20 +739,21 @@ class _SystemPromptSettingsState extends ConsumerState<SystemPromptSettings> {
               FButton(
                 onPress: () async {
                   if (nameController.text.isEmpty || contentController.text.isEmpty) return;
-                  
-                  final service = ref.read(systemPromptServiceProvider);
+                  final notifier = ref.read(systemPromptNotifierProvider.notifier);
+                  SystemPrompt updatedPrompt;
                   if (prompt == null) {
-                    await service.addPrompt(SystemPrompt(
+                    updatedPrompt = SystemPrompt(
                       name: nameController.text,
                       content: contentController.text,
-                    ));
+                    );
+                    await notifier.addPrompt(updatedPrompt);
                   } else {
-                    await service.updatePrompt(prompt.copyWith(
+                    updatedPrompt = prompt.copyWith(
                       name: nameController.text,
                       content: contentController.text,
-                    ));
+                    );
+                    await notifier.updatePrompt(updatedPrompt);
                   }
-                  ref.invalidate(customPromptsProvider);
                   if (mounted) Navigator.pop(context);
                 },
                 child: const Text('保存'),
@@ -820,9 +808,8 @@ class _SystemPromptSettingsState extends ConsumerState<SystemPromptSettings> {
       final markdown = await file.readAsString();
       final prompt = SystemPrompt.fromMarkdown(markdown);
       
-      final service = ref.read(systemPromptServiceProvider);
-      await service.addPrompt(prompt);
-      ref.invalidate(customPromptsProvider);
+      final notifier = ref.read(systemPromptNotifierProvider.notifier);
+      await notifier.addPrompt(prompt);
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -840,7 +827,7 @@ class _SystemPromptSettingsState extends ConsumerState<SystemPromptSettings> {
 
   @override
   Widget build(BuildContext context) {
-    final promptsAsync = ref.watch(customPromptsProvider);
+    final prompts = ref.watch(customPromptsProvider);
     final theme = FTheme.of(context);
 
     return Padding(
@@ -882,8 +869,9 @@ class _SystemPromptSettingsState extends ConsumerState<SystemPromptSettings> {
           ),
           const SizedBox(height: 16),
           Expanded(
-            child: promptsAsync.when(
-              data: (prompts) => ListView.builder(
+            child: prompts.isEmpty
+              ? const Center(child: Text('暂无自定义提示词'))
+              : ListView.builder(
                 itemCount: prompts.length,
                 itemBuilder: (context, index) {
                   final prompt = prompts[index];
@@ -910,8 +898,7 @@ class _SystemPromptSettingsState extends ConsumerState<SystemPromptSettings> {
                                     Checkbox(
                                       value: prompt.isEnabled,
                                       onChanged: (value) async {
-                                        await ref.read(systemPromptServiceProvider).togglePrompt(prompt.id);
-                                        ref.invalidate(customPromptsProvider);
+                                        await ref.read(systemPromptNotifierProvider.notifier).togglePrompt(prompt.id);
                                       },
                                       visualDensity: VisualDensity.compact,
                                       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -955,8 +942,7 @@ class _SystemPromptSettingsState extends ConsumerState<SystemPromptSettings> {
                                         );
 
                                         if (confirm == true) {
-                                          await ref.read(systemPromptServiceProvider).deletePrompt(prompt.id);
-                                          ref.invalidate(customPromptsProvider);
+                                          await ref.read(systemPromptNotifierProvider.notifier).deletePrompt(prompt.id);
                                         }
                                       },
                                       child: const Icon(Icons.delete, size: 16),
@@ -981,11 +967,8 @@ class _SystemPromptSettingsState extends ConsumerState<SystemPromptSettings> {
                   );
                 },
               ),
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, s) => Center(child: Text('错误: $e')),
-            ),
-          ),
-        ],
+        ),
+      ],
       ),
     );
   }

@@ -18,6 +18,7 @@ import 'package:flutter/services.dart';
 import 'settings_page.dart';
 import '../services/shared_prefs_service.dart';
 import '../models/system_prompt.dart';
+import '../services/system_prompt_service.dart';
 
 final currentResponseProvider = StateProvider<String>((ref) => '');
 
@@ -708,83 +709,69 @@ class _AiChatState extends ConsumerState<AiChat> {
                                 }
                                 final hasPrompt = currentSession?.systemPrompt != null;
                                 final currentPrompt = currentSession?.systemPrompt;
-                                final promptsAsync = ref.watch(enabledSystemPromptsProvider);
-                                return promptsAsync.when(
-                                  data: (prompts) {
-                                    return FPopoverMenu(
-                                      menuAnchor: Alignment.topCenter,
-                                      childAnchor: Alignment.bottomCenter,
-                                      menu: [
-                                        FItemGroup(
-                                          children: [
-                                            FItem(title: const Text('不使用系统提示词'), suffix: currentPrompt == null ? Icon(Icons.check, size: 16, color: Theme.of(context).colorScheme.primary) : null, onPress: () async {
-                                              var sid = ref.read(currentSessionIdProvider);
-                                              if (sid == null) {
-                                                final session = await ref.read(sessionListProvider.notifier).createNewSession();
-                                                sid = session.id;
-                                                ref.read(currentSessionIdProvider.notifier).setSessionId(sid);
-                                              }
-                                              ref.read(sessionListProvider.notifier).updateSessionSystemPrompt(sid, null);
-                                              await ref.read(sharedPrefsServiceProvider).saveDefaultSystemPrompt(null);
-                                              ref.invalidate(enabledSystemPromptsProvider);
-                                            },
-                                            ),
-                                            ...prompts.map((p) => FItem(
-                                              title: Text(p.name), suffix: currentPrompt == p.content ? Icon(Icons.check, size: 16, color: Theme.of(context).colorScheme.primary) : null, onPress: () async {
-                                                var sid = ref.read(currentSessionIdProvider);
-                                                if (sid == null) {
-                                                  final session = await ref.read(sessionListProvider.notifier).createNewSession();
-                                                  sid = session.id;
-                                                  ref.read(currentSessionIdProvider.notifier).setSessionId(sid);
-                                                }
-                                                ref.read(sessionListProvider.notifier).updateSessionSystemPrompt(sid, p.content);
-                                                await ref.read(sharedPrefsServiceProvider).saveDefaultSystemPrompt(p.content);
-                                                ref.invalidate(enabledSystemPromptsProvider);
-                                              },
-                                            )),
-                                            FItem(
-                                              prefix: const Icon(Icons.edit),
-                                              title: const Text('管理提示词'),
-                                              onPress: () {
-                                                ref.read(selectedSectionProvider.notifier).state = SettingsSection.prompts;
-                                                Navigator.of(context).push(
-                                                  MaterialPageRoute(
-                                                    builder: (context) => const SettingsPage(),
-                                                  ),
-                                                );
-                                              },
-                                            ),
-                                          ],
+                                final prompts = ref.watch(enabledSystemPromptsProvider);
+                                return FPopoverMenu(
+                                  menuAnchor: Alignment.topCenter,
+                                  childAnchor: Alignment.bottomCenter,
+                                  menu: [
+                                    FItemGroup(
+                                      children: [
+                                        FItem(title: const Text('不使用系统提示词'), suffix: currentPrompt == null ? Icon(Icons.check, size: 16, color: Theme.of(context).colorScheme.primary) : null, onPress: () async {
+                                          var sid = ref.read(currentSessionIdProvider);
+                                          if (sid == null) {
+                                            final session = await ref.read(sessionListProvider.notifier).createNewSession();
+                                            sid = session.id;
+                                            ref.read(currentSessionIdProvider.notifier).setSessionId(sid);
+                                          }
+                                          ref.read(sessionListProvider.notifier).updateSessionSystemPrompt(sid, null);
+                                          await ref.read(sharedPrefsServiceProvider).saveDefaultSystemPrompt(null);
+                                        },
+                                        ),
+                                        ...prompts.map((p) => FItem(
+                                          title: Text(p.name), suffix: currentPrompt == p.content ? Icon(Icons.check, size: 16, color: Theme.of(context).colorScheme.primary) : null, onPress: () async {
+                                            var sid = ref.read(currentSessionIdProvider);
+                                            if (sid == null) {
+                                              final session = await ref.read(sessionListProvider.notifier).createNewSession();
+                                              sid = session.id;
+                                              ref.read(currentSessionIdProvider.notifier).setSessionId(sid);
+                                            }
+                                            ref.read(sessionListProvider.notifier).updateSessionSystemPrompt(sid, p.content);
+                                            await ref.read(sharedPrefsServiceProvider).saveDefaultSystemPrompt(p.content);
+                                          },
+                                        )),
+                                        FItem(
+                                          prefix: const Icon(Icons.edit),
+                                          title: const Text('管理提示词'),
+                                          onPress: () {
+                                            ref.read(selectedSectionProvider.notifier).state = SettingsSection.prompts;
+                                            Navigator.of(context).push(
+                                              MaterialPageRoute(
+                                                builder: (context) => const SettingsPage(),
+                                              ),
+                                            );
+                                          },
                                         ),
                                       ],
-                                      builder: (context, controller, child) => IconButton(
-                                        key: ValueKey(hasPrompt),
-                                        icon: Icon(
-                                          hasPrompt ? Icons.description : Icons.description_outlined,
-                                          size: 14,
-                                          color: hasPrompt ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurface.withOpacity(0.38),
-                                        ),
-                                        tooltip: hasPrompt ? '当前使用系统提示词' : '不使用系统提示词',
-                                        constraints: const BoxConstraints(
-                                          maxWidth: 32,
-                                          maxHeight: 32,
-                                        ),
-                                        padding: EdgeInsets.zero,
-                                        style: IconButton.styleFrom(
-                                          shape: const CircleBorder(),
-                                          hoverColor: Theme.of(context).colorScheme.primary.withOpacity(0.08),
-                                        ),
-                                        onPressed: controller.toggle,
-                                      ),
-                                    );
-                                  },
-                                  loading: () => const SizedBox(width: 32, height: 32),
-                                  error: (err, stack) => IconButton(
-                                    icon: const Icon(Icons.error_outline, size: 14, color: Colors.red),
-                                    tooltip: '加载失败',
-                                    constraints: const BoxConstraints(maxWidth: 32, maxHeight: 32),
+                                    ),
+                                  ],
+                                  builder: (context, controller, child) => IconButton(
+                                    key: ValueKey(hasPrompt),
+                                    icon: Icon(
+                                      hasPrompt ? Icons.description : Icons.description_outlined,
+                                      size: 14,
+                                      color: hasPrompt ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurface.withOpacity(0.38),
+                                    ),
+                                    tooltip: hasPrompt ? '当前使用系统提示词' : '不使用系统提示词',
+                                    constraints: const BoxConstraints(
+                                      maxWidth: 32,
+                                      maxHeight: 32,
+                                    ),
                                     padding: EdgeInsets.zero,
-                                    onPressed: null,
+                                    style: IconButton.styleFrom(
+                                      shape: const CircleBorder(),
+                                      hoverColor: Theme.of(context).colorScheme.primary.withOpacity(0.08),
+                                    ),
+                                    onPressed: controller.toggle,
                                   ),
                                 );
                               },

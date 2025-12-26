@@ -1,75 +1,84 @@
 import 'dart:convert';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../models/system_prompt.dart';
 import '../models/prompt/prompt_map.dart';
 
-class SystemPromptService {
+class SystemPromptNotifier extends StateNotifier<List<SystemPrompt>> {
   static const String _boxName = 'system_prompts';
+  Box<dynamic>? _box;
 
-  Future<Box> _getBox() async {
-    if (!Hive.isBoxOpen(_boxName)) {
-      return await Hive.openBox(_boxName);
-    }
-    return Hive.box(_boxName);
+  SystemPromptNotifier() : super([]) {
+    _init();
   }
 
-  Future<List<SystemPrompt>> _getCustomPrompts() async {
-    final box = await _getBox();
-    final List<dynamic> rawList = box.get('prompts', defaultValue: []);
-    return rawList.map((item) {
+  Future<void> _init() async {
+    _box = await Hive.openBox(_boxName);
+    _loadCustomPrompts();
+  }
+
+  void _loadCustomPrompts() {
+    if (_box == null) return;
+    final List<dynamic> rawList = _box!.get('prompts', defaultValue: <dynamic>[]);
+    state = rawList.map((item) {
+      Map<String, dynamic> jsonMap;
       if (item is String) {
-        return SystemPrompt.fromJson(json.decode(item));
+        jsonMap = json.decode(item) as Map<String, dynamic>;
+      } else {
+        jsonMap = Map<String, dynamic>.from(item as Map);
       }
-      return SystemPrompt.fromJson(Map<String, dynamic>.from(item));
+      return SystemPrompt.fromJson(jsonMap);
     }).toList();
   }
 
-  Future<void> _saveCustomPrompts(List<SystemPrompt> prompts) async {
-    final box = await _getBox();
-    final data = prompts.map((p) => p.toJson()).toList();
-    await box.put('prompts', data);
-  }
-
-  Future<List<SystemPrompt>> getCustomPrompts() async {
-    return await _getCustomPrompts();
-  }
-
-
-  Future<List<SystemPrompt>> getAllPrompts() async {
-    final predefined = getChatPromptMap().values.toList();
-    final customs = await _getCustomPrompts();
-    return [...predefined, ...customs];
-  }
-
-
   Future<void> addPrompt(SystemPrompt prompt) async {
-    final customs = await _getCustomPrompts();
-    customs.add(prompt);
-    await _saveCustomPrompts(customs);
+    if (_box == null) return;
+    state = [...state, prompt];
+    await _save();
   }
 
   Future<void> updatePrompt(SystemPrompt prompt) async {
-    final customs = await _getCustomPrompts();
-    final index = customs.indexWhere((p) => p.id == prompt.id);
+    if (_box == null) return;
+    final index = state.indexWhere((p) => p.id == prompt.id);
     if (index != -1) {
-      customs[index] = prompt;
-      await _saveCustomPrompts(customs);
+      state = List<SystemPrompt>.from(state)..[index] = prompt;
+      await _save();
     }
   }
 
   Future<void> deletePrompt(String id) async {
-    final customs = await _getCustomPrompts();
-    customs.removeWhere((p) => p.id == id);
-    await _saveCustomPrompts(customs);
+    if (_box == null) return;
+    state = state.where((p) => p.id != id).toList();
+    await _save();
   }
 
   Future<void> togglePrompt(String id) async {
-    final customs = await _getCustomPrompts();
-    final index = customs.indexWhere((p) => p.id == id);
+    if (_box == null) return;
+    final index = state.indexWhere((p) => p.id == id);
     if (index != -1) {
-      customs[index] = customs[index].copyWith(isEnabled: !customs[index].isEnabled);
-      await _saveCustomPrompts(customs);
+      final updated = state[index].copyWith(isEnabled: !state[index].isEnabled);
+      state = List<SystemPrompt>.from(state)..[index] = updated;
+      await _save();
     }
   }
 
+  Future<void> _save() async {
+    if (_box == null) return;
+    final data = state.map((p) => p.toJson()).toList();
+    await _box!.put('prompts', data);
+  }
 }
+
+final systemPromptNotifierProvider = StateNotifierProvider<SystemPromptNotifier, List<SystemPrompt>>((ref) => SystemPromptNotifier());
+
+final customPromptsProvider = Provider<List<SystemPrompt>>((ref) => ref.watch(systemPromptNotifierProvider));
+
+final allSystemPromptsProvider = Provider<List<SystemPrompt>>((ref) {
+  final customs = ref.watch(systemPromptNotifierProvider);
+  return [...getChatPromptMap().values.toList(), ...customs];
+});
+
+final enabledSystemPromptsProvider = Provider<List<SystemPrompt>>((ref) {
+  final allPrompts = ref.watch(allSystemPromptsProvider);
+  return allPrompts.where((p) => p.isEnabled).toList();
+});

@@ -667,7 +667,7 @@ class _ImagePageState extends ConsumerState<ImagePage> {
                   child: TextField(
                     controller: _promptController,
                     decoration: InputDecoration(
-                      hintText: isGenerating ? '生成中...' : (messages.isEmpty ? '描述图像' : '基于参考图片生成新图像（支持多张）'),
+                      hintText: isGenerating ? '生成中...' : (messages.isEmpty ? '描述图像' : '编辑图像'),
                       prefixIcon: Padding(
                         padding: const EdgeInsets.only(left: 8),
                         child: Row(

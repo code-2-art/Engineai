@@ -2,6 +2,7 @@ import '../system_prompt.dart';
 import 'research/physician.dart';
 import 'video/wan_shot.dart';
 import 'video/flux.dart';
+import 'video/image_annotation.dart';
 import 'music/music_udio.dart';
 
 /// 聊天系统预定义提示词映射
@@ -34,6 +35,11 @@ Map<String, SystemPrompt> getChatPromptMap() {
       id: 'music_udio',
       name: '背景音乐',
       content: trailer_music_udio,
+    ),
+    'image_annotation': SystemPrompt(
+      id: 'music_udio',
+      name: '图片标注',
+      content: image_annotation,
     ),
   };
 }
