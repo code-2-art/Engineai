@@ -49,8 +49,9 @@ dependencies:
   file_picker: ^10.3.8
   markdown_widget: ^2.3.2+8
   pro_image_editor: ^11.15.0
-
-
+  mcp_client: ^1.0.2
+ 
+ 
 dev_dependencies:
   flutter_test:
     sdk: flutter

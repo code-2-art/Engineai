@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:forui/forui.dart';
 import '../theme/theme.dart';
 import '../services/llm_provider.dart';
+import '../services/mcp_provider.dart';
+import 'package:mcp_client/mcp_client.dart' as mcp;
 import '../models/chat_session.dart';
 import '../services/session_provider.dart';
 import 'package:markdown_widget/markdown_widget.dart';
@@ -183,24 +185,300 @@ class _AiChatState extends ConsumerState<AiChat> {
 
       ref.read(currentResponseProvider.notifier).state = '';
 
-      print('AiChat: Fetching LLM provider...');
-      final llmFuture = ref.read(chatLlmProvider.future);
-      final llm = await llmFuture;
-      print('AiChat: LLM provider ready.');
-
-      if (!mounted) return;
-
-      setState(() {
-        _isSending = true;
-      });
-
       // Prune history based on separators (history before user message)
       final fullHistory = currentSession.messages;
       final lastClearIndex = fullHistory.lastIndexWhere((m) => m.isSystem);
       final effectiveHistory = lastClearIndex == -1
           ? fullHistory
           : fullHistory.sublist(lastClearIndex + 1);
+    
+      print('AiChat: 检查 MCP...');
+      final mcpClientFuture = ref.read(currentMcpClientProvider.future);
+      mcp.Client? mcpClient;
+      try {
+        mcpClient = await mcpClientFuture;
+      } catch (e) {
+        print('AiChat: MCP client 加载失败: $e');
+      }
+      
+      if (mcpClient != null) {
+        print('AiChat: MCP client capabilities: ${mcpClient.serverCapabilities}');
+        print('AiChat: MCP serverInfo: ${mcpClient.serverInfo}');
+        
+        // 检查可用工具和提示词
+        List<mcp.Tool> toolsResp = [];
+        try {
+          toolsResp = await mcpClient.listTools();
+          print('AiChat: MCP available tools: ${toolsResp.map((t) => t.name).toList()}');
+          for (final tool in toolsResp) {
+            print('AiChat: Tool ${tool.name}: ${tool.description}');
+            print('AiChat: Tool ${tool.name} inputSchema: ${tool.inputSchema}');
+          }
 
+                  
+                
+        } catch (e) {
+          print('AiChat: List tools error: $e');
+        }
+        
+        try {
+          final promptsResp = await mcpClient.listPrompts();
+          print('AiChat: MCP available prompts: ${promptsResp.map((p) => p.name).toList()}');
+        } catch (e) {
+          print('AiChat: List prompts error: $e');
+        }
+        
+        // LLM-based automatic MCP tool calling (通用，无需特定提示)
+        if (toolsResp.isNotEmpty) {
+          final toolsDesc = toolsResp.map((t) => '- **${t.name}**: ${t.description}\n  输入 schema: ```json\n${JsonEncoder.withIndent('  ').convert(t.inputSchema)}```').join('\n\n');
+          
+          final decidePrompt = '''
+分析用户查询："$prompt"
+
+可用工具：
+$toolsDesc
+
+任务：决定是否调用工具来回答查询。
+
+输出**仅**有效JSON，无任何其他文字：
+
+- 需要工具：{"tool": "tool_name", "params": {"param_name": "value", ...}}
+- 不需要：{"tool": null}
+
+参数必须符合工具 schema。
+          ''';
+          
+          print('AiChat: LLM deciding tool use...');
+          final decideLlm = await ref.read(chatLlmProvider.future);
+          String decideFull = '';
+          await for (final delta in decideLlm.generateStream([], decidePrompt)) {
+            decideFull += delta;
+          }
+          print('AiChat: Tool decide: $decideFull');
+          
+          Map<String, dynamic>? decideJson;
+          try {
+            decideJson = json.decode(decideFull);
+          } catch (e) {
+            print('AiChat: Decide JSON parse error: $e');
+          }
+          
+          if (decideJson != null && decideJson['tool'] != null) {
+            String currentToolName = decideJson['tool'] as String;
+            Map<String, dynamic> currentParams = decideJson['params'] as Map<String, dynamic>;
+            
+            const int maxRetries = 3;
+            bool toolSuccess = false;
+            String toolResp = '';
+            
+            for (int retry = 0; retry < maxRetries; retry++) {
+              print('AiChat: Tool call attempt ${retry + 1}/$maxRetries: $currentToolName with $currentParams');
+              try {
+                final toolResult = await mcpClient.callTool(currentToolName, currentParams);
+                
+                if (toolResult.content is mcp.TextContent) {
+                  toolResp = (toolResult.content as mcp.TextContent).text;
+                } else if (toolResult.content is List<mcp.Content>) {
+                  toolResp = toolResult.content.whereType<mcp.TextContent>().map((c) => c.text).join('\n');
+                }
+                
+                if (toolResp.isNotEmpty) {
+                  toolSuccess = true;
+                  break;
+                }
+              } catch (e) {
+                print('AiChat: Tool call failed (attempt ${retry + 1}): $e');
+                
+                if (retry == maxRetries - 1) break;
+                
+                // LLM retry decide
+                final retryDecPrompt = '''
+上次工具调用失败：$e
+
+原用户查询：$prompt
+
+当前工具：$currentToolName
+
+当前参数：${json.encode(currentParams)}
+
+请调整参数或选择其他工具，输出新JSON。
+
+$decidePrompt
+                '''.trim();
+                
+                String retryFull = '';
+                await for (final delta in decideLlm.generateStream([], retryDecPrompt)) {
+                  retryFull += delta;
+                }
+                
+                print('AiChat: Retry decide: $retryFull');
+                
+                Map<String, dynamic>? retryJson;
+                try {
+                  retryJson = json.decode(retryFull);
+                } catch (parseE) {
+                  print('AiChat: Retry JSON parse error: $parseE');
+                  continue;
+                }
+                
+                if (retryJson != null && retryJson['tool'] != null) {
+                  currentToolName = retryJson['tool'] as String;
+                  final retryParams = retryJson['params'];
+                  if (retryParams is Map<String, dynamic>) {
+                    currentParams = retryParams;
+                  }
+                }
+              }
+            }
+            
+            if (!toolSuccess || toolResp.isEmpty) {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: const Text('工具调用多次失败，请检查参数或网络'),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
+              return;
+            }
+            
+            final analysisPrompt = '''
+用户查询：$prompt
+
+工具调用：$currentToolName(${json.encode(currentParams)})
+
+工具结果：
+$toolResp
+
+请基于工具结果，给出完整、自然的中文回答。
+            '''.trim();
+            
+            print('AiChat: Starting tool result analysis stream...');
+            if (!mounted) return;
+            
+            setState(() {
+              _isSending = true;
+            });
+            
+            final llm = await ref.read(chatLlmProvider.future);
+            final stream = llm.generateStream(
+              effectiveHistory,
+              analysisPrompt,
+              systemPrompt: currentSession.systemPrompt ?? ''
+            );
+            
+            _responseSubscription?.cancel();
+            _responseSubscription = stream.listen(
+              (delta) {
+                if (delta.isEmpty || !mounted) return;
+                final current = ref.read(currentResponseProvider);
+                ref.read(currentResponseProvider.notifier).state = current + delta;
+                _scrollToBottom();
+              },
+              onDone: () {
+                print('AiChat: Tool analysis stream finished.');
+                _addAIMessage();
+                if (mounted) {
+                  setState(() {
+                    _isSending = false;
+                  });
+                }
+              },
+              onError: (e) {
+                print('AiChat: Tool analysis stream error: $e');
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('分析失败: $e')),
+                  );
+                }
+                _resetSendingState();
+              },
+            );
+            return;
+          }
+        }
+        
+        final supportsSampling = mcpClient.serverCapabilities?.sampling ?? false;
+        print('AiChat: Server supports sampling: $supportsSampling');
+        
+        if (supportsSampling) {
+          print('AiChat: 使用 MCP 生成响应');
+          try {
+            List<mcp.Message> mcpHistory = [];
+            if (currentSession.systemPrompt != null && currentSession.systemPrompt!.isNotEmpty) {
+              mcpHistory.add(mcp.Message(
+                role: 'system',
+                content: mcp.TextContent(text: currentSession.systemPrompt!),
+              ));
+            }
+            for (final msg in effectiveHistory) {
+              final role = msg.isUser ? 'user' : 'assistant';
+              final text = _getDisplayText(msg);
+              mcpHistory.add(mcp.Message(
+                role: role,
+                content: mcp.TextContent(text: text),
+              ));
+            }
+            mcpHistory.add(mcp.Message(
+              role: 'user',
+              content: mcp.TextContent(text: prompt),  // 暂不支持图片
+            ));
+
+            final request = mcp.CreateMessageRequest(
+              messages: mcpHistory,
+              maxTokens: 4096,
+              temperature: 0.7,
+            );
+
+            final result = await mcpClient.createMessage(request);
+
+            String fullResponse = '';
+            if (result.content is mcp.TextContent) {
+              fullResponse = (result.content as mcp.TextContent).text;
+            } else {
+              for (final content in (result.content as List<mcp.Content>)) {
+                if (content is mcp.TextContent) {
+                  fullResponse += content.text;
+                }
+              }
+            }
+
+            ref.read(currentResponseProvider.notifier).state = fullResponse;
+            _addAIMessage();
+            if (mounted) {
+              setState(() {
+                _isSending = false;
+              });
+            }
+            return;
+          } catch (e) {
+            print('AiChat: MCP 生成失败: $e');
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('MCP 生成失败，fallback 到 LLM: $e')),
+              );
+            }
+          }
+        } else {
+          print('AiChat: MCP sampling not supported, fallback to LLM');
+        }
+      }
+    
+      // Fallback to LLM
+      print('AiChat: Fetching LLM provider...');
+      final llmFuture = ref.read(chatLlmProvider.future);
+      final llm = await llmFuture;
+      print('AiChat: LLM provider ready.');
+      
+      if (!mounted) return;
+      
+      if (!mounted) return;
+      
+      setState(() {
+        _isSending = true;
+      });
+    
       print('AiChat: Starting stream with ${effectiveHistory.length} messages in history...');
       final stream = llm.generateStream(effectiveHistory, prompt, userContentParts: userContentParts, systemPrompt: currentSession.systemPrompt);
 
@@ -868,6 +1146,89 @@ class _AiChatState extends ConsumerState<AiChat> {
                                   error: (err, stack) => IconButton(
                                     icon: const Icon(Icons.error_outline, size: 14, color: Colors.red),
                                     tooltip: '加载模型失败',
+                                    constraints: const BoxConstraints(maxWidth: 32, maxHeight: 32),
+                                    padding: EdgeInsets.zero,
+                                    onPressed: null,
+                                  ),
+                                );
+                              },
+                            ),
+                            const SizedBox(width: 8),
+                            Consumer(
+                              builder: (context, ref, child) {
+                                final currentMcp = ref.watch(currentMcpProvider);
+                                final configsAsync = ref.watch(mcpConfigProvider);
+                                return configsAsync.when(
+                                  data: (servers) {
+                                    if (servers.isEmpty) {
+                                      return IconButton(
+                                        icon: const Icon(Icons.extension_outlined, size: 14),
+                                        tooltip: '无 MCP 服务器',
+                                        constraints: const BoxConstraints(maxWidth: 32, maxHeight: 32),
+                                        padding: EdgeInsets.zero,
+                                        style: IconButton.styleFrom(
+                                          shape: const CircleBorder(),
+                                          hoverColor: Theme.of(context).colorScheme.primary.withOpacity(0.08),
+                                        ),
+                                        onPressed: null,
+                                      );
+                                    }
+                                    return FPopoverMenu(
+                                      menuAnchor: Alignment.topCenter,
+                                      childAnchor: Alignment.bottomCenter,
+                                      menu: [
+                                        FItemGroup(
+                                          children: [
+                                            FItem(
+                                              title: const Text('不使用 MCP'),
+                                              suffix: currentMcp.isEmpty ? const Icon(Icons.check, size: 16, color: Colors.transparent) : null,
+                                              onPress: () {
+                                                ref.read(currentMcpProvider.notifier).state = '';
+                                              },
+                                            ),
+                                            ...servers.map((server) => FItem(
+                                              title: Text(server.name),
+                                              suffix: currentMcp == server.name ? Icon(Icons.check, size: 16, color: Theme.of(context).colorScheme.primary) : null,
+                                              onPress: () {
+                                                ref.read(currentMcpProvider.notifier).state = server.name;
+                                              },
+                                            )),
+                                            FItem(
+                                              prefix: const Icon(Icons.settings),
+                                              title: const Text('管理 MCP'),
+                                              onPress: () {
+                                                ref.read(selectedSectionProvider.notifier).state = SettingsSection.mcp;
+                                                Navigator.of(context).push(
+                                                  MaterialPageRoute(
+                                                    builder: (context) => const SettingsPage(),
+                                                  ),
+                                                );
+                                              },
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                      builder: (context, controller, child) => IconButton(
+                                        icon: Icon(
+                                          Icons.extension,
+                                          size: 14,
+                                          color: currentMcp.isNotEmpty ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurface.withOpacity(0.38),
+                                        ),
+                                        tooltip: currentMcp.isNotEmpty ? '当前 MCP: $currentMcp' : '选择 MCP 服务器',
+                                        constraints: const BoxConstraints(maxWidth: 32, maxHeight: 32),
+                                        padding: EdgeInsets.zero,
+                                        style: IconButton.styleFrom(
+                                          shape: const CircleBorder(),
+                                          hoverColor: Theme.of(context).colorScheme.primary.withOpacity(0.08),
+                                        ),
+                                        onPressed: controller.toggle,
+                                      ),
+                                    );
+                                  },
+                                  loading: () => const SizedBox(width: 32, height: 32),
+                                  error: (err, stack) => IconButton(
+                                    icon: const Icon(Icons.error_outline, size: 14, color: Colors.red),
+                                    tooltip: '加载 MCP 失败',
                                     constraints: const BoxConstraints(maxWidth: 32, maxHeight: 32),
                                     padding: EdgeInsets.zero,
                                     onPressed: null,

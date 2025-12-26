@@ -10,12 +10,16 @@ import '../models/system_prompt.dart';
 import '../services/system_prompt_service.dart';
 import '../services/llm_provider.dart';
 import '../models/llm_configs.dart';
+import '../services/mcp_provider.dart';
+import '../models/mcp_config.dart';
+import 'package:mcp_client/mcp_client.dart';
 
 
 enum SettingsSection {
   general('通用', Icons.tune),
   models('模型', Icons.model_training),
-  prompts('人设', Icons.description_outlined);
+  prompts('人设', Icons.description_outlined),
+  mcp('MCP', Icons.extension);
 
   final String label;
   final IconData icon;
@@ -91,6 +95,8 @@ class SettingsPage extends ConsumerWidget {
         return const LLMSettings();
       case SettingsSection.prompts:
         return const SystemPromptSettings();
+      case SettingsSection.mcp:
+        return const MCPSettings();
     }
   }
 }
@@ -969,7 +975,409 @@ class _SystemPromptSettingsState extends ConsumerState<SystemPromptSettings> {
               ),
         ),
       ],
+    ),
+  );
+}
+}
+
+class MCPSettings extends ConsumerStatefulWidget {
+  const MCPSettings({super.key});
+
+  @override
+  ConsumerState<MCPSettings> createState() => _MCPSettingsState();
+}
+
+class _MCPSettingsState extends ConsumerState<MCPSettings> {
+
+  void _showServerDialog(BuildContext context, WidgetRef ref, {McpServerConfig? existing}) {
+    final nameController = TextEditingController(text: existing?.name);
+    final pathController = TextEditingController(text: existing?.pathOrUrl);
+    McpType selectedType = existing?.type ?? McpType.remote;
+    final originalName = existing?.name;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: Text(existing == null ? '添加 MCP 服务器' : '编辑 MCP 服务器'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  hintText: '服务器名称 (e.g. weather)',
+                ),
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<McpType>(
+                value: selectedType,
+                decoration: const InputDecoration(
+                  hintText: '类型',
+                ),
+                items: McpType.values.map((type) => DropdownMenuItem(
+                  value: type,
+                  child: Text(type.name.toUpperCase()),
+                )).toList(),
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() {
+                      selectedType = value;
+                    });
+                  }
+                },
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: pathController,
+                decoration: const InputDecoration(
+                  hintText: 'Path (local) 或 URL (remote, e.g. http://localhost:8080/sse)',
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                FButton(
+                  onPress: () => Navigator.of(context).pop(),
+                  child: const Text('取消'),
+                ),
+                const SizedBox(width: 12),
+                FButton(
+                  onPress: () {
+                    if (nameController.text.isNotEmpty && pathController.text.isNotEmpty) {
+                      final newConfig = McpServerConfig(
+                        name: nameController.text.trim(),
+                        type: selectedType,
+                        pathOrUrl: pathController.text.trim(),
+                      );
+                      if (existing != null && originalName != null && originalName != newConfig.name) {
+                        ref.read(mcpConfigProvider.notifier).removeServer(originalName);
+                      }
+                      if (existing == null) {
+                        ref.read(mcpConfigProvider.notifier).addServer(newConfig);
+                      } else {
+                        ref.read(mcpConfigProvider.notifier).updateServer(newConfig);
+                      }
+                      Navigator.of(context).pop();
+                    }
+                  },
+                  child: const Text('保存'),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
+    );
+  }
+
+  Future<void> _handleExport(BuildContext context, WidgetRef ref) async {
+    try {
+      final notifier = ref.read(mcpConfigProvider.notifier);
+      final jsonData = notifier.exportToJson();
+      final jsonString = const JsonEncoder.withIndent('  ').convert(jsonData);
+      
+      final outputPath = await FilePicker.platform.saveFile(
+        dialogTitle: '保存 MCP 配置',
+        fileName: 'mcp_config_export.json',
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+      );
+      
+      if (outputPath != null) {
+        final file = File(outputPath);
+        await file.writeAsString(jsonString);
+        
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('MCP 配置已保存到硬盘')),
+          );
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('导出失败: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleImport(BuildContext context, WidgetRef ref) async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+      );
+      
+      if (result == null || result.files.isEmpty) return;
+      
+      final file = File(result.files.single.path!);
+      final jsonString = await file.readAsString();
+      final jsonData = json.decode(jsonString) as List<dynamic>;
+      
+      final shouldMerge = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('导入模式'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('请选择如何导入配置：'),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: FButton(
+                      onPress: () => Navigator.pop(context, true),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.merge_type, size: 32),
+                          const SizedBox(height: 8),
+                          const Text('合并', style: TextStyle(fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 4),
+                          Text(
+                            '保留现有配置\n添加新配置',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: FButton(
+                      onPress: () => Navigator.pop(context, false),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.refresh, size: 32),
+                          const SizedBox(height: 8),
+                          const Text('覆盖', style: TextStyle(fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 4),
+                          Text(
+                            '删除现有配置\n仅使用导入',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            FButton(
+              onPress: () => Navigator.pop(context),
+              child: const Text('取消'),
+            ),
+          ],
+        ),
+      );
+      
+      if (shouldMerge != null) {
+        await ref.read(mcpConfigProvider.notifier).importFromJson(jsonData, merge: shouldMerge);
+        
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(shouldMerge ? 'MCP 配置已合并' : 'MCP 配置已覆盖')),
+          );
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('导入失败: $e')),
+        );
+      }
+    }
+  }
+
+  Map<String, String> statusMap = {};
+  Map<String, List<String>> toolsMap = {};
+
+  Future<void> _testConnection(McpServerConfig server) async {
+    setState(() {
+      statusMap[server.name] = 'connecting...';
+      toolsMap[server.name] = [];
+    });
+
+    try {
+      final config = McpClient.simpleConfig(
+        name: 'EngineAI',
+        version: '1.0.0',
+        enableDebugLogging: false,
+      );
+      final transportConfig = TransportConfig.streamableHttp(
+        baseUrl: server.pathOrUrl,
+      );
+      final result = await McpClient.createAndConnect(
+        config: config,
+        transportConfig: transportConfig,
+      );
+      final client = result.fold((c) => c, (e) => throw Exception('连接失败: $e'));
+      final tools = await client.listTools();
+      client.disconnect();
+
+      if (mounted) {
+        setState(() {
+          statusMap[server.name] = '已连接';
+          toolsMap[server.name] = tools.map((t) => t.name).toList();
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          statusMap[server.name] = '连接失败: $e';
+          toolsMap[server.name] = [];
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final configsAsync = ref.watch(mcpConfigProvider);
+    final theme = FTheme.of(context);
+
+    return configsAsync.when(
+      data: (servers) {
+        return Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  SizedBox(
+                    width: 120,
+                    child: TextButton.icon(
+                      onPressed: () => _showServerDialog(context, ref),
+                      icon: const Icon(Icons.add, size: 16),
+                      label: const Text('MCP 服务器'),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  FButton.icon(
+                    onPress: () => _handleImport(context, ref),
+                    child: const Icon(Icons.upload_file, size: 16),
+                  ),
+                  const SizedBox(width: 8),
+                  FButton.icon(
+                    onPress: () => _handleExport(context, ref),
+                    child: const Icon(Icons.download, size: 16),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: servers.isEmpty
+                    ? const Center(child: Text('暂无 MCP 服务器配置，点击"添加 MCP 服务器"开始'))
+                    : ListView.separated(
+                        itemCount: servers.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 12),
+                        itemBuilder: (context, index) {
+                          final server = servers[index];
+                          final status = statusMap[server.name] ?? '未测试';
+                          final tools = toolsMap[server.name] ?? [];
+                          final isConnected = status == '已连接';
+                          return FCard(
+                            child: Padding(
+                              padding: const EdgeInsets.all(16.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              server.name,
+                                              style: theme.typography.lg.copyWith(fontWeight: FontWeight.bold),
+                                            ),
+                                            Text('类型: ${server.type.name.toUpperCase()}', style: theme.typography.sm),
+                                            Text('路径/URL: ${server.pathOrUrl}', style: theme.typography.sm),
+                                          ],
+                                        ),
+                                      ),
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            isConnected ? Icons.check_circle : Icons.error_outline,
+                                            color: isConnected ? Colors.green : Colors.orange,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(status, style: theme.typography.xs),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    children: [
+                                      FButton.icon(
+                                        onPress: () => _testConnection(server),
+                                        child: const Icon(Icons.refresh, size: 16),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      FButton.icon(
+                                        onPress: () => _showServerDialog(context, ref, existing: server),
+                                        child: const Icon(Icons.edit, size: 16),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      FButton.icon(
+                                        onPress: () {
+                                          ref.read(mcpConfigProvider.notifier).removeServer(server.name);
+                                        },
+                                        child: const Icon(Icons.delete, size: 16),
+                                      ),
+                                    ],
+                                  ),
+                                  if (tools.isNotEmpty) ...[
+                                    const SizedBox(height: 12),
+                                    Text('可用工具 (${tools.length}):', style: theme.typography.sm.copyWith(fontWeight: FontWeight.bold)),
+                                    const SizedBox(height: 8),
+                                    Wrap(
+                                      spacing: 4,
+                                      runSpacing: 4,
+                                      children: tools.map((tool) => Chip(
+                                        label: Text(tool, style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onPrimaryContainer)),
+                                        backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                                      )).toList(),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        );
+      },
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (err, stack) => Center(child: Text('Error: $err')),
     );
   }
 }
