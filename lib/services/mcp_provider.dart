@@ -12,7 +12,10 @@ class McpConfigNotifier extends AsyncNotifier<List<McpServerConfig>> {
 
   @override
   Future<List<McpServerConfig>> build() async {
-    return await _storage.readConfig();
+    print('=== MCP CONFIG PROVIDER BUILD START ===');
+    final configs = await _storage.readConfig();
+    print('=== MCP CONFIG PROVIDER BUILD DONE: ${configs.length} servers ===');
+    return configs;
   }
 
   Future<void> _save(List<McpServerConfig> configs) async {
@@ -68,11 +71,16 @@ final mcpConfigProvider = AsyncNotifierProvider<McpConfigNotifier, List<McpServe
 
 class McpClientsNotifier extends AsyncNotifier<Map<String, Client>> {
   @override
-  Future<Map<String, Client>> build() async => <String, Client>{};
+  Future<Map<String, Client>> build() async {
+    print('=== MCP CLIENTS PROVIDER BUILD START ===');
+    return <String, Client>{};
+  }
 
   Future<Client?> getClient(String serverName) async {
+    print('=== GET MCP CLIENT START for $serverName ===');
     var clients = state.valueOrNull ?? {};
     if (clients.containsKey(serverName)) {
+      print('=== MCP CLIENT $serverName already exists ===');
       return clients[serverName];
     }
     final configs = await ref.read(mcpConfigProvider.future);
@@ -94,10 +102,12 @@ class McpClientsNotifier extends AsyncNotifier<Map<String, Client>> {
       transportConfig = TransportConfig.sse(serverUrl: config.pathOrUrl);
     }
 
+    print('=== MCP CONNECT START for $serverName ===');
     final clientResult = await McpClient.createAndConnect(
       config: clientConfig,
       transportConfig: transportConfig,
     );
+    print('=== MCP CONNECT DONE for $serverName ===');
 
     final client = clientResult.fold(
       (c) => c,

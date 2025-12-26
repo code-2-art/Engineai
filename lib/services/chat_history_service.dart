@@ -14,18 +14,24 @@ class ChatHistoryService {
   }
 
   Future<List<ChatSession>> getSessions() async {
+    print('=== CHAT HISTORY GET SESSIONS START ===');
     try {
       final box = await _getBox();
       final List<dynamic>? jsonList = box.get(_key);
 
       if (jsonList != null) {
-        return jsonList
+        List<ChatSession> sessions = jsonList
             .map((item) => ChatSession.fromJson(json.decode(item as String)))
             .toList();
+        sessions.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        sessions = sessions.take(2).toList();
+        print('=== CHAT HISTORY GET SESSIONS DONE: ${sessions.length} sessions (recent 2 only) ===');
+        return sessions;
       }
     } catch (e) {
       print('ChatHistoryService: Error reading sessions: $e');
     }
+    print('=== CHAT HISTORY GET SESSIONS DONE: 0 sessions ===');
     return [];
   }
 
@@ -36,6 +42,65 @@ class ChatHistoryService {
       await box.put(_key, jsonList);
     } catch (e) {
       print('ChatHistoryService: Error saving sessions: $e');
+    }
+  }
+
+  static const String _summariesKey = 'history_summaries';
+
+  Future<List<SessionSummary>> getSummaries() async {
+    print('=== CHAT HISTORY GET SUMMARIES START ===');
+    try {
+      final box = await _getBox();
+      final List<dynamic>? jsonList = box.get(_summariesKey);
+
+      if (jsonList != null) {
+        final summaries = jsonList.map((item) => SessionSummary.fromJson(item as Map<String, dynamic>)).toList();
+        print('=== CHAT HISTORY GET SUMMARIES DONE: ${summaries.length} ===');
+        return summaries;
+      }
+    } catch (e) {
+      print('ChatHistoryService: Error reading summaries: $e');
+    }
+    print('=== CHAT HISTORY GET SUMMARIES DONE: 0 ===');
+    return [];
+  }
+
+  Future<void> saveSummaries(List<SessionSummary> summaries) async {
+    try {
+      final jsonList = summaries.map((s) => s.toJson()).toList();
+      final box = await _getBox();
+      await box.put(_summariesKey, jsonList);
+    } catch (e) {
+      print('ChatHistoryService: Error saving summaries: $e');
+    }
+  }
+
+  Future<ChatSession?> getSessionById(String id) async {
+    print('=== CHAT HISTORY GET SESSION BY ID $id START ===');
+    try {
+      final box = await _getBox();
+      final jsonString = box.get(id);
+      if (jsonString != null) {
+        final session = ChatSession.fromJson(json.decode(jsonString as String));
+        print('=== CHAT HISTORY GET SESSION BY ID $id DONE ===');
+        return session;
+      }
+    } catch (e) {
+      print('ChatHistoryService: Error reading session $id: $e');
+    }
+    print('=== CHAT HISTORY GET SESSION BY ID $id NOT FOUND ===');
+    return null;
+  }
+
+  Future<void> saveSession(ChatSession session) async {
+    print('=== CHAT HISTORY SAVE SESSION ${session.id} START ===');
+    try {
+      final jsonString = json.encode(session.toJson());
+      final box = await _getBox();
+      await box.put(session.id, jsonString);
+      print('=== CHAT HISTORY SAVE SESSION ${session.id} DONE ===');
+    } catch (e) {
+      print('ChatHistoryService: Error saving session ${session.id}: $e');
     }
   }
 

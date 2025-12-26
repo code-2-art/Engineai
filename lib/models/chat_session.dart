@@ -99,3 +99,42 @@ class ChatSession {
     );
   }
 }
+
+class SessionSummary {
+  final String id;
+  final String title;
+  final DateTime createdAt;
+
+  const SessionSummary({
+    required this.id,
+    required this.title,
+    required this.createdAt,
+  });
+
+  SessionSummary copyWith({
+    String? title,
+    DateTime? createdAt,
+  }) {
+    return SessionSummary(
+      id: id,
+      title: title ?? this.title,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  factory SessionSummary.fromJson(Map<String, dynamic> json) {
+    return SessionSummary(
+      id: json['id'] as String,
+      title: json['title'] as String,
+      createdAt: DateTime.parse(json['createdAt'] as String),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'createdAt': createdAt.toIso8601String(),
+    };
+  }
+}

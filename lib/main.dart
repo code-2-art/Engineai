@@ -20,10 +20,16 @@ import 'services/chat_history_service.dart';
 import 'widgets/history_list.dart';
 
 void main() async {
+  print('=== MAIN START ===');
   WidgetsFlutterBinding.ensureInitialized();
+  print('=== BINDINGS DONE ===');
+  print('=== HIVE INIT START ===');
   await Hive.initFlutter();
+  print('=== HIVE INIT DONE ===');
   
+  print('=== SHARED PREFS INIT START ===');
   final prefs = await SharedPreferences.getInstance();
+  print('=== SHARED PREFS INIT DONE ===');
 
   final container = ProviderContainer(
     overrides: [
@@ -31,8 +37,9 @@ void main() async {
     ],
   );
   
-  // Pre-warm the configuration and LLM provider
+  print('=== CONFIG PROVIDER PREWARM START ===');
   unawaited(container.read(configProvider.future));
+  print('=== CHAT LLM PROVIDER PREWARM START ===');
   unawaited(container.read(chatLlmProvider.future));
 
   runApp(

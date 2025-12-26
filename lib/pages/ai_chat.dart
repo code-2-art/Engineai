@@ -39,6 +39,13 @@ class _AiChatState extends ConsumerState<AiChat> {
   List<String> _imageBase64s = [];
 
   @override
+  void initState() {
+    super.initState();
+    print('=== AI CHAT INITSTATE START ===');
+    print('=== AI CHAT INITSTATE DONE ===');
+  }
+
+  @override
   void dispose() {
     _responseSubscription?.cancel();
     _controller.dispose();
@@ -135,6 +142,7 @@ class _AiChatState extends ConsumerState<AiChat> {
   }
 
   Future<void> _sendMessage() async {
+    print('=== AI CHAT SEND MESSAGE START ===');
     final prompt = _controller.text.trim();
     if (prompt.isEmpty || _isSending) return;
 

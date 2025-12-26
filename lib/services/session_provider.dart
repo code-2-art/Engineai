@@ -11,11 +11,14 @@ class SessionNotifier extends StateNotifier<List<ChatSession>> {
   final SharedPrefsService _prefsService;
 
   SessionNotifier(this._service, this._prefsService) : super([]) {
+    print('=== SESSION NOTIFIER CONSTRUCTOR START ===');
     _loadSessions();
   }
 
   Future<void> _loadSessions() async {
+    print('=== SESSION LOAD START ===');
     state = await _service.getSessions();
+    print('=== SESSION LOAD DONE ===');
   }
 
   Future<ChatSession> createNewSession() async {
