@@ -137,14 +137,13 @@ class _ImagePageState extends ConsumerState<ImagePage> {
     try {
       final prompt = sessionWithLoading.messages.last.prompt;
       final generator = await ref.read(imageGeneratorProvider.future);
-      String? base64Image;
-      String? mimeType;
-      if (sessionWithLoading.messages.length > 1) {
-        final prevMsg = sessionWithLoading.messages[sessionWithLoading.messages.length - 2];
-        base64Image = base64Encode(prevMsg.image);
-        mimeType = 'image/png';
+      List<String> base64Images = [];
+      for (final msg in sessionWithLoading.messages.sublist(0, sessionWithLoading.messages.length - 1)) {
+        if (msg.image.isNotEmpty) {
+          base64Images.add(base64Encode(msg.image));
+        }
       }
-      final result = await generator.generateImage(prompt, base64Image: base64Image, mimeType: mimeType);
+      final result = await generator.generateImage(prompt, base64Images: base64Images);
       if (result.imageBytes != null) {
         final realMsg = ImageMessage(prompt, result.imageBytes!, result.description);
         final newMessages = List<ImageMessage>.from(sessionWithLoading.messages);
@@ -204,19 +203,22 @@ class _ImagePageState extends ConsumerState<ImagePage> {
   Future<void> _uploadImage() async {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.image,
+        allowMultiple: true,
       );
       if (result != null && result.files.isNotEmpty) {
-        final file = result.files.first;
-        Uint8List bytes;
-        if (file.bytes != null) {
-          bytes = file.bytes!;
-        } else if (file.path != null) {
-          bytes = await File(file.path!).readAsBytes();
-        } else {
-          return;
+        List<ImageMessage> newMessages = [];
+        for (final file in result.files) {
+          Uint8List bytes;
+          if (file.bytes != null) {
+            bytes = file.bytes!;
+          } else if (file.path != null) {
+            bytes = await File(file.path!).readAsBytes();
+          } else {
+            continue;
+          }
+          final name = file.name.isNotEmpty ? file.name : 'image.${file.extension ?? 'png'}';
+          newMessages.add(ImageMessage('上传：$name', bytes, null));
         }
-        final name = file.name.isNotEmpty ? file.name : 'image.${file.extension ?? 'jpg'}';
-        final message = ImageMessage('上传：$name', bytes, null);
 
         final currentSessionOpt = ref.read(currentImageSessionProvider);
         ImageSession currentSession;
@@ -227,7 +229,7 @@ class _ImagePageState extends ConsumerState<ImagePage> {
         } else {
           currentSession = currentSessionOpt;
         }
-        final updatedSession = currentSession.copyWith(messages: [...currentSession.messages, message]);
+        final updatedSession = currentSession.copyWith(messages: [...currentSession.messages, ...newMessages]);
         await ref.read(imageSessionListProvider.notifier).updateSession(updatedSession);
         _promptController.clear();
         _scrollToBottom();
@@ -665,7 +667,7 @@ class _ImagePageState extends ConsumerState<ImagePage> {
                   child: TextField(
                     controller: _promptController,
                     decoration: InputDecoration(
-                      hintText: isGenerating ? '生成中...' : (messages.isEmpty ? '描述图像' : '编辑最后一张图片'),
+                      hintText: isGenerating ? '生成中...' : (messages.isEmpty ? '描述图像' : '基于参考图片生成新图像（支持多张）'),
                       prefixIcon: Padding(
                         padding: const EdgeInsets.only(left: 8),
                         child: Row(
@@ -723,7 +725,7 @@ class _ImagePageState extends ConsumerState<ImagePage> {
                             const SizedBox(width: 8),
                             IconButton(
                               icon: const Icon(Icons.upload_file, size: 14),
-                              tooltip: '上传图像',
+                              tooltip: '上传参考图片',
                               constraints: const BoxConstraints(
                                 minWidth: 32,
                                 maxWidth: 32,

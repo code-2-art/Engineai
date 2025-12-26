@@ -9,7 +9,7 @@ import '../services/session_provider.dart';
 import 'package:markdown_widget/markdown_widget.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'package:image/image.dart' as img;
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'dart:typed_data';
@@ -97,26 +97,36 @@ class _AiChatState extends ConsumerState<AiChat> {
   }
 
   Future<void> _pickImage() async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.image);
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      allowMultiple: true,
+    );
     if (result != null && result.files.isNotEmpty) {
-      final file = result.files.first;
-      final path = file.path;
-      if (path != null) {
+      for (final file in result.files) {
+        Uint8List originalBytes;
+        if (file.bytes != null) {
+          originalBytes = file.bytes!;
+        } else {
+          final path = file.path;
+          if (path == null) continue;
+          originalBytes = await File(path).readAsBytes();
+        }
         Uint8List bytes;
         try {
-          bytes = (await FlutterImageCompress.compressWithFile(
-            path,
-            minWidth: 1024,
-            quality: 90,
-            format: CompressFormat.png,
-          )) ?? await File(path).readAsBytes();
+          final image = img.decodeImage(originalBytes);
+          if (image != null) {
+            final resized = img.copyResize(image, width: 1024);
+            bytes = img.encodePng(resized, level: 0);
+          } else {
+            bytes = originalBytes;
+          }
         } catch (e) {
           print('图片压缩失败: $e，使用原图');
-          bytes = await File(path).readAsBytes();
+          bytes = originalBytes;
         }
         _imageBase64s.add(base64Encode(bytes));
-        if (mounted) setState(() {});
       }
+      if (mounted) setState(() {});
     }
   }
 

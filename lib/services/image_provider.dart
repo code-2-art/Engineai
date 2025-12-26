@@ -17,7 +17,7 @@ class ImageGenerationResult {
 }
 
 abstract class ImageGenerator {
-  Future<ImageGenerationResult> generateImage(String prompt, {String? base64Image, String? mimeType});
+  Future<ImageGenerationResult> generateImage(String prompt, {List<String>? base64Images});
 }
 
 class CustomImageGenerator implements ImageGenerator {
@@ -43,18 +43,20 @@ class CustomImageGenerator implements ImageGenerator {
   }
 
   @override
-  Future<ImageGenerationResult> generateImage(String prompt, {String? base64Image, String? mimeType}) async {
+  Future<ImageGenerationResult> generateImage(String prompt, {List<String>? base64Images}) async {
     if (apiKey.trim().isEmpty) {
       throw Exception('请在设置页面配置有效的 API Key');
     }
 
     final url = Uri.parse(_normalizeUrl(baseUrl));
     List<Map<String, dynamic>> contentParts = [];
-    if (base64Image != null && mimeType != null) {
-      contentParts.add({
-        'type': 'image_url',
-        'image_url': {'url': 'data:$mimeType;base64,$base64Image'}
-      });
+    if (base64Images != null && base64Images.isNotEmpty) {
+      for (final base64 in base64Images) {
+        contentParts.add({
+          'type': 'image_url',
+          'image_url': {'url': 'data:image/png;base64,$base64'}
+        });
+      }
     }
     contentParts.add({'type': 'text', 'text': prompt});
 
