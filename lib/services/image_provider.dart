@@ -75,7 +75,7 @@ class CustomImageGenerator implements ImageGenerator {
     print('ImageGenerator: Request URL: $url');
     print('ImageGenerator: Request model: $modelId');
     final bodyStr = json.encode(body);
-    print('ImageGenerator: Request body preview: ${bodyStr.length < 1000 ? bodyStr : bodyStr.substring(0, 1000)}...');
+    print('ImageGenerator: Request body length: ${bodyStr.length}');
 
     final response = await http.post(
       url,
@@ -87,7 +87,7 @@ class CustomImageGenerator implements ImageGenerator {
     );
 
     print('ImageGenerator: Response status: ${response.statusCode}');
-    print('ImageGenerator: Response body preview: ${response.body.length < 500 ? response.body : response.body.substring(0, 500)}...');
+    print('ImageGenerator: Response body length: ${response.body.length}');
 
     if (response.statusCode == 200) {
       final data = json.decode(response.body);
@@ -144,7 +144,7 @@ class CustomImageGenerator implements ImageGenerator {
         return ImageGenerationResult(imageBytes: imageBytes, description: description);
       }
     }
-    print('ImageGenerator: HTTP Error ${response.statusCode}: ${response.body.length < 500 ? response.body : response.body.substring(0, 500)}...');
+    print('ImageGenerator: HTTP Error ${response.statusCode}, body length: ${response.body.length}');
     throw Exception('图像生成失败: HTTP ${response.statusCode}\n${response.body}');
   }
 }

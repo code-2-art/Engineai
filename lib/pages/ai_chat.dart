@@ -370,8 +370,14 @@ $toolResp
             });
             
             final llm = await ref.read(chatLlmProvider.future);
+            final textHistory = effectiveHistory.map((msg) => Message(
+              isUser: msg.isUser,
+              text: _getDisplayText(msg),
+              sender: msg.sender,
+              timestamp: msg.timestamp,
+            )).toList();
             final stream = llm.generateStream(
-              effectiveHistory,
+              textHistory,
               analysisPrompt,
               systemPrompt: currentSession.systemPrompt ?? ''
             );
@@ -487,8 +493,14 @@ $toolResp
         _isSending = true;
       });
     
-      print('AiChat: Starting stream with ${effectiveHistory.length} messages in history...');
-      final stream = llm.generateStream(effectiveHistory, prompt, userContentParts: userContentParts, systemPrompt: currentSession.systemPrompt);
+      final textHistory = effectiveHistory.map((msg) => Message(
+        isUser: msg.isUser,
+        text: _getDisplayText(msg),
+        sender: msg.sender,
+        timestamp: msg.timestamp,
+      )).toList();
+      print('AiChat: Starting stream with ${textHistory.length} text-only messages...');
+      final stream = llm.generateStream(textHistory, prompt, userContentParts: userContentParts, systemPrompt: currentSession.systemPrompt ?? '');
 
       _responseSubscription?.cancel();
       _responseSubscription = stream.listen(

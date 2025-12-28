@@ -150,9 +150,9 @@ class _ImagePageState extends ConsumerState<ImagePage> {
         newMessages[newMessages.length - 1] = realMsg;
         final updatedSession = sessionWithLoading.copyWith(messages: newMessages);
         await ref.read(imageSessionListProvider.notifier).updateSession(updatedSession);
-        if (mounted) {
-          _scrollToBottom();
-        }
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _scrollToBottom();
+        });
       } else {
         throw Exception('No image bytes returned');
       }
@@ -577,7 +577,7 @@ class _ImagePageState extends ConsumerState<ImagePage> {
                                         borderRadius: BorderRadius.circular(4),
                                         child: msg.image.isEmpty
                                             ? Container(
-                                                height: 240,
+                                                height: 320,
                                                 decoration: BoxDecoration(
                                                   color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
                                                   borderRadius: BorderRadius.circular(4),

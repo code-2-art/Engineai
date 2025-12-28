@@ -24,8 +24,7 @@ class ChatHistoryService {
             .map((item) => ChatSession.fromJson(json.decode(item as String)))
             .toList();
         sessions.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-        sessions = sessions.take(2).toList();
-        print('=== CHAT HISTORY GET SESSIONS DONE: ${sessions.length} sessions (recent 2 only) ===');
+        print('=== CHAT HISTORY GET SESSIONS DONE: ${sessions.length} sessions (all loaded) ===');
         return sessions;
       }
     } catch (e) {
