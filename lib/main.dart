@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:forui/forui.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'services/system_prompt_service.dart';
 import 'pages/ai_chat.dart';
 import 'pages/settings_page.dart';
 import 'pages/image_page.dart';
@@ -41,6 +42,11 @@ void main() async {
   unawaited(container.read(configProvider.future));
   print('=== CHAT LLM PROVIDER PREWARM START ===');
   unawaited(container.read(chatLlmProvider.future));
+
+  print('=== SYSTEM PROMPT PREWARM START ===');
+  unawaited(container.read(systemPromptNotifierProvider.notifier).ensureInit());
+  unawaited(container.read(builtinPromptNotifierProvider.notifier).ensureInit());
+  print('=== SYSTEM PROMPT PREWARM DONE ===');
 
   runApp(
     UncontrolledProviderScope(
