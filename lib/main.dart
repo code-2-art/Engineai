@@ -19,6 +19,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'services/chat_history_service.dart';
 import 'widgets/history_list.dart';
+import 'services/generation_task_manager.dart';
 
 void main() async {
   print('=== MAIN START ===');
@@ -47,6 +48,12 @@ void main() async {
   unawaited(container.read(systemPromptNotifierProvider.notifier).ensureInit());
   unawaited(container.read(builtinPromptNotifierProvider.notifier).ensureInit());
   print('=== SYSTEM PROMPT PREWARM DONE ===');
+
+  // 初始化任务管理器
+  print('=== TASK MANAGER INIT START ===');
+  final taskManager = container.read(taskManagerProvider);
+  unawaited(taskManager.init());
+  print('=== TASK MANAGER INIT DONE ===');
 
   runApp(
     UncontrolledProviderScope(

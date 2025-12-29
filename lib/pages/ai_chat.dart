@@ -21,6 +21,8 @@ import 'settings_page.dart';
 import '../services/shared_prefs_service.dart';
 import '../models/system_prompt.dart';
 import '../services/system_prompt_service.dart';
+import '../services/generation_task_manager.dart';
+import '../models/generation_task.dart';
 
 final currentResponseProvider = StateProvider<String>((ref) => '');
 
@@ -37,17 +39,68 @@ class _AiChatState extends ConsumerState<AiChat> {
   bool _isSending = false;
   StreamSubscription<String>? _responseSubscription;
   List<String> _imageBase64s = [];
+  String? _currentTaskId;
 
   @override
   void initState() {
     super.initState();
     print('=== AI CHAT INITSTATE START ===');
     print('=== AI CHAT INITSTATE DONE ===');
+    // 检查是否有运行中的任务
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkRunningTask();
+    });
+  }
+
+  void _checkRunningTask() {
+    final taskManager = ref.read(taskManagerProvider);
+    final runningTask = taskManager.getRunningTask(TaskType.chat);
+    if (runningTask != null) {
+      _currentTaskId = runningTask.id;
+      setState(() {
+        _isSending = true;
+      });
+      // 监听任务状态
+      _listenToTask(runningTask.id);
+    }
+  }
+
+  void _listenToTask(String taskId) {
+    final taskManager = ref.read(taskManagerProvider);
+    taskManager.watchTask(taskId).listen((task) {
+      if (!mounted) return;
+      
+      // 更新当前响应
+      if (task.currentResponse != null) {
+        ref.read(currentResponseProvider.notifier).state = task.currentResponse!;
+        _scrollToBottom();
+      }
+      
+      // 处理任务完成
+      if (task.status == TaskStatus.completed) {
+        _addAIMessage();
+        setState(() {
+          _isSending = false;
+        });
+        _currentTaskId = null;
+      }
+      
+      // 处理任务失败
+      if (task.status == TaskStatus.failed) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('生成失败: ${task.error}')),
+        );
+        setState(() {
+          _isSending = false;
+        });
+        _currentTaskId = null;
+      }
+    });
   }
 
   @override
   void dispose() {
-    _responseSubscription?.cancel();
+    // 不再取消任务，只取消页面级别的订阅
     _controller.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -80,7 +133,10 @@ class _AiChatState extends ConsumerState<AiChat> {
 
   void _stopGenerating() {
     print('AiChat: Stopping generation...');
-    _responseSubscription?.cancel();
+    if (_currentTaskId != null) {
+      final taskManager = ref.read(taskManagerProvider);
+      taskManager.cancelTask(_currentTaskId!);
+    }
     _addAIMessage();
     if (mounted) {
       setState(() {
@@ -208,6 +264,26 @@ class _AiChatState extends ConsumerState<AiChat> {
       } catch (e) {
         print('AiChat: MCP client 加载失败: $e');
       }
+      
+      // 创建任务
+      final taskManager = ref.read(taskManagerProvider);
+      final taskId = await taskManager.createChatTask(
+        sessionId!,
+        prompt,
+        userContentParts,
+        currentSession.systemPrompt,
+        ref,
+      );
+      
+      _currentTaskId = taskId;
+      setState(() {
+        _isSending = true;
+      });
+      
+      // 监听任务状态
+      _listenToTask(taskId);
+      
+      return;
       
       if (mcpClient != null) {
         print('AiChat: MCP client capabilities: ${mcpClient.serverCapabilities}');
@@ -479,56 +555,6 @@ $toolResp
         }
       }
     
-      // Fallback to LLM
-      print('AiChat: Fetching LLM provider...');
-      final llmFuture = ref.read(chatLlmProvider.future);
-      final llm = await llmFuture;
-      print('AiChat: LLM provider ready.');
-      
-      if (!mounted) return;
-      
-      if (!mounted) return;
-      
-      setState(() {
-        _isSending = true;
-      });
-    
-      final textHistory = effectiveHistory.map((msg) => Message(
-        isUser: msg.isUser,
-        text: _getDisplayText(msg),
-        sender: msg.sender,
-        timestamp: msg.timestamp,
-      )).toList();
-      print('AiChat: Starting stream with ${textHistory.length} text-only messages...');
-      final stream = llm.generateStream(textHistory, prompt, userContentParts: userContentParts, systemPrompt: currentSession.systemPrompt ?? '');
-
-      _responseSubscription?.cancel();
-      _responseSubscription = stream.listen(
-        (delta) {
-          if (delta.isEmpty || !mounted) return;
-          final current = ref.read(currentResponseProvider);
-          ref.read(currentResponseProvider.notifier).state = current + delta;
-          _scrollToBottom();
-        },
-        onDone: () {
-          print('AiChat: Stream finished.');
-          _addAIMessage();
-          if (mounted) {
-            setState(() {
-              _isSending = false;
-            });
-          }
-        },
-        onError: (e) {
-          print('AiChat: Stream error: $e');
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('生成失败: $e')),
-            );
-          }
-          _resetSendingState();
-        },
-      );
     } catch (e) {
       print('AiChat: _sendMessage error: $e');
       if (mounted) {

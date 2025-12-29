@@ -13,6 +13,8 @@ import '../services/image_provider.dart';
 import '../services/image_session_provider.dart';
 import '../models/image_message.dart';
 import '../models/image_session.dart';
+import '../services/generation_task_manager.dart';
+import '../models/generation_task.dart';
 
 
 class ImagePage extends ConsumerStatefulWidget {
@@ -24,8 +26,9 @@ class ImagePage extends ConsumerStatefulWidget {
 
 class _ImagePageState extends ConsumerState<ImagePage> {
   final TextEditingController _promptController = TextEditingController();
-    final ScrollController _scrollController = ScrollController();
-    final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  final ScrollController _scrollController = ScrollController();
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  String? _currentTaskId;
 
   Widget _buildModelSelector(BuildContext context, WidgetRef ref) {
     final namesAsync = ref.watch(imageModelNamesProvider);
@@ -79,9 +82,64 @@ class _ImagePageState extends ConsumerState<ImagePage> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final sessionOpt = ref.read(currentImageSessionProvider);
-      if (sessionOpt != null && sessionOpt.messages.isNotEmpty && sessionOpt.messages.last.image.isEmpty) {
-        _performBackgroundGeneration(sessionOpt);
+      _checkRunningTask();
+    });
+  }
+
+  void _checkRunningTask() {
+    final taskManager = ref.read(taskManagerProvider);
+    final runningTask = taskManager.getRunningTask(TaskType.image);
+    if (runningTask != null) {
+      _currentTaskId = runningTask.id;
+      // 监听任务状态
+      _listenToTask(runningTask.id);
+    }
+  }
+
+  void _listenToTask(String taskId) {
+    final taskManager = ref.read(taskManagerProvider);
+    taskManager.watchTask(taskId).listen((task) {
+      if (!mounted) return;
+      
+      // 处理任务完成
+      if (task.status == TaskStatus.completed && task.generatedImage != null) {
+        final currentSession = ref.read(currentImageSessionProvider);
+        if (currentSession != null) {
+          final messagePrompt = currentSession.messages.last.prompt;
+          final realMsg = ImageMessage(
+            messagePrompt,
+            task.generatedImage!,
+            task.currentResponse,
+          );
+          final newMessages = List<ImageMessage>.from(currentSession.messages);
+          newMessages[newMessages.length - 1] = realMsg;
+          final updatedSession = currentSession.copyWith(messages: newMessages);
+          ref.read(imageSessionListProvider.notifier).updateSession(updatedSession);
+          _scrollToBottom();
+        }
+        _currentTaskId = null;
+      }
+      
+      // 处理任务失败
+      if (task.status == TaskStatus.failed) {
+        // 移除加载消息
+        final currentSession = ref.read(currentImageSessionProvider);
+        if (currentSession != null) {
+          final newMessages = currentSession.messages.sublist(0, currentSession.messages.length - 1);
+          final updatedSession = currentSession.copyWith(messages: newMessages);
+          ref.read(imageSessionListProvider.notifier).updateSession(updatedSession);
+        }
+        
+        if (mounted) {
+          services.Clipboard.setData(services.ClipboardData(text: task.error ?? ''));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('生成失败，错误详情已复制到剪贴板'),
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
+        _currentTaskId = null;
       }
     });
   }
@@ -127,77 +185,24 @@ class _ImagePageState extends ConsumerState<ImagePage> {
     _promptController.clear();
     _scrollToBottom();
   
-    // Start background generation
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _performBackgroundGeneration(updatedWithLoading);
-    });
-  }
-  
-  Future<void> _performBackgroundGenerationAsync(ImageSession sessionWithLoading) async {
-    try {
-      final prompt = sessionWithLoading.messages.last.prompt;
-      final generator = await ref.read(imageGeneratorProvider.future);
-      List<String> base64Images = [];
-      for (final msg in sessionWithLoading.messages.sublist(0, sessionWithLoading.messages.length - 1)) {
-        if (msg.image.isNotEmpty) {
-          base64Images.add(base64Encode(msg.image));
-        }
-      }
-      final result = await generator.generateImage(prompt, base64Images: base64Images);
-      if (result.imageBytes != null) {
-        final realMsg = ImageMessage(prompt, result.imageBytes!, result.description);
-        final newMessages = List<ImageMessage>.from(sessionWithLoading.messages);
-        newMessages[newMessages.length - 1] = realMsg;
-        final updatedSession = sessionWithLoading.copyWith(messages: newMessages);
-        await ref.read(imageSessionListProvider.notifier).updateSession(updatedSession);
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) _scrollToBottom();
-        });
-      } else {
-        throw Exception('No image bytes returned');
-      }
-    } catch (e) {
-      debugPrint('Background image generation error: $e');
-      // Remove the loading message on error
-      final newMessages = sessionWithLoading.messages.sublist(0, sessionWithLoading.messages.length - 1);
-      final updatedSession = sessionWithLoading.copyWith(messages: newMessages);
-      await ref.read(imageSessionListProvider.notifier).updateSession(updatedSession);
-      if (mounted) {
-        final errorMsg = e.toString();
-        services.Clipboard.setData(services.ClipboardData(text: errorMsg));
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('生成失败，错误详情已复制到剪贴板'),
-            duration: const Duration(seconds: 4),
-            action: SnackBarAction(
-              label: '查看详情',
-              onPressed: () {
-                showDialog(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text('错误详情'),
-                    content: SelectableText(
-                      e.toString(),
-                      style: const TextStyle(fontFamily: 'monospace'),
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        child: const Text('关闭'),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-        );
+    // 创建任务
+    final taskManager = ref.read(taskManagerProvider);
+    List<String> base64Images = [];
+    for (final msg in currentSession.messages.sublist(0, currentSession.messages.length - 1)) {
+      if (msg.image.isNotEmpty) {
+        base64Images.add(base64Encode(msg.image));
       }
     }
-  }
-  
-  void _performBackgroundGeneration(ImageSession sessionWithLoading) {
-    _performBackgroundGenerationAsync(sessionWithLoading);
+    
+    final taskId = await taskManager.createImageTask(
+      currentSession.id,
+      messagePrompt,
+      base64Images,
+      ref,
+    );
+    
+    _currentTaskId = taskId;
+    _listenToTask(taskId);
   }
 
   Future<void> _uploadImage() async {
