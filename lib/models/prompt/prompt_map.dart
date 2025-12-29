@@ -37,7 +37,7 @@ Map<String, SystemPrompt> getChatPromptMap() {
       content: trailer_music_udio,
     ),
     'image_annotation': SystemPrompt(
-      id: 'music_udio',
+      id: 'image_annotation',
       name: '图片标注',
       content: image_annotation,
     ),

@@ -28,7 +28,7 @@ class SystemPromptNotifier extends StateNotifier<List<SystemPrompt>> {
         jsonMap = Map<String, dynamic>.from(item as Map);
       }
       return SystemPrompt.fromJson(jsonMap);
-    }).toList();
+    }).where((p) => !getChatPromptMap().containsKey(p.id)).toList();
   }
 
   Future<void> addPrompt(SystemPrompt prompt) async {
@@ -75,7 +75,7 @@ final customPromptsProvider = Provider<List<SystemPrompt>>((ref) => ref.watch(sy
 
 final allSystemPromptsProvider = Provider<List<SystemPrompt>>((ref) {
   final customs = ref.watch(systemPromptNotifierProvider);
-  return [...getChatPromptMap().values.toList(), ...customs];
+  return [...customs, ...getChatPromptMap().values.toList()];
 });
 
 final enabledSystemPromptsProvider = Provider<List<SystemPrompt>>((ref) {
