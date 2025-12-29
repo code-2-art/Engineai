@@ -32,6 +32,7 @@ Data will now persist in your browser's local storage.
 ## macos
    ```bash
    flutter run -d macos
+   flutter run -d macos --release
    ```
 
 
