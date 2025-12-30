@@ -10,6 +10,7 @@ import '../models/chat_session.dart';
 import '../services/session_provider.dart';
 import 'package:markdown_widget/markdown_widget.dart';
 import 'package:share_plus/share_plus.dart';
+import '../widgets/code_block_widget.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image/image.dart' as img;
 import 'dart:io';
@@ -857,7 +858,7 @@ $toolResp
                                                 : MarkdownConfig.defaultConfig;
                                             return DefaultTextStyle(
                                               style: TextStyle(color: textColor),
-                                              child: MarkdownWidget(
+                                              child: MarkdownWidgetWithCopyButton(
                                                 data: displayText,
                                                 config: config,
                                                 selectable: true,
