@@ -262,13 +262,19 @@ class _AiChatState extends ConsumerState<AiChat> {
           ? fullHistory
           : fullHistory.sublist(lastClearIndex + 1);
     
-      print('AiChat: 检查 MCP...');
-      final mcpClientFuture = ref.read(currentMcpClientProvider.future);
+      // 检查是否选择了 MCP 服务器，如果没有选择则跳过 MCP 检查
+      final currentMcp = ref.read(currentMcpProvider);
       mcp.Client? mcpClient;
-      try {
-        mcpClient = await mcpClientFuture;
-      } catch (e) {
-        print('AiChat: MCP client 加载失败: $e');
+      if (currentMcp.isNotEmpty) {
+        print('AiChat: 检查 MCP... 当前选择的 MCP: $currentMcp');
+        final mcpClientFuture = ref.read(currentMcpClientProvider.future);
+        try {
+          mcpClient = await mcpClientFuture;
+        } catch (e) {
+          print('AiChat: MCP client 加载失败: $e');
+        }
+      } else {
+        print('AiChat: 未选择 MCP 服务器，跳过 MCP 检查');
       }
       
       // 创建任务
