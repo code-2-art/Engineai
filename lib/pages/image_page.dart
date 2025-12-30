@@ -97,12 +97,15 @@ class _ImagePageState extends ConsumerState<ImagePage> {
   }
 
   void _listenToTask(String taskId) {
+    print('ImagePage: Start listening to task $taskId');
     final taskManager = ref.read(taskManagerProvider);
     taskManager.watchTask(taskId).listen((task) {
+      print('ImagePage: Task $taskId update status: ${task.status}');
       if (!mounted) return;
       
       // 处理任务完成
       if (task.status == TaskStatus.completed && task.generatedImage != null) {
+        print('ImagePage: Task completed, updating session');
         final currentSession = ref.read(currentImageSessionProvider);
         if (currentSession != null) {
           final messagePrompt = currentSession.messages.last.prompt;
@@ -122,6 +125,7 @@ class _ImagePageState extends ConsumerState<ImagePage> {
       
       // 处理任务失败
       if (task.status == TaskStatus.failed) {
+        print('ImagePage: Task failed, error: ${task.error}');
         // 移除加载消息
         final currentSession = ref.read(currentImageSessionProvider);
         if (currentSession != null) {
@@ -189,13 +193,14 @@ class _ImagePageState extends ConsumerState<ImagePage> {
     final taskManager = ref.read(taskManagerProvider);
     List<String> base64Images = [];
     
-    // 查找最后一个分隔符
-    final lastSeparatorIndex = currentSession.messages.lastIndexWhere((msg) => msg.isSeparator);
+    // 使用更新后的消息，但排除loading消息
+    final contextMessages = updatedWithLoading.messages.sublist(0, updatedWithLoading.messages.length - 1);
+    final lastSeparatorIndex = contextMessages.lastIndexWhere((msg) => msg.isSeparator);
     
     // 只使用最后一个分隔符之后的图片
     final messagesToUse = lastSeparatorIndex == -1
-        ? currentSession.messages.sublist(0, currentSession.messages.length - 1)
-        : currentSession.messages.sublist(lastSeparatorIndex + 1, currentSession.messages.length - 1);
+        ? contextMessages
+        : contextMessages.sublist(lastSeparatorIndex + 1);
     
     for (final msg in messagesToUse) {
       if (msg.image.isNotEmpty) {
@@ -203,15 +208,15 @@ class _ImagePageState extends ConsumerState<ImagePage> {
       }
     }
     
-    final taskId = await taskManager.createImageTask(
+    final taskId = await taskManager.createImageTaskPending(
       currentSession.id,
       messagePrompt,
       base64Images,
-      ref,
     );
     
     _currentTaskId = taskId;
     _listenToTask(taskId);
+    await taskManager.startImageTask(taskId, ref);
   }
 
   Future<void> _uploadImage() async {

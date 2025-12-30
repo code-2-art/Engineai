@@ -87,13 +87,13 @@ class GenerationTaskManager {
   }
 
   // 创建 Image 任务
-  Future<String> createImageTask(
+  Future<String> createImageTaskPending(
     String sessionId,
     String prompt,
     List<String>? base64Images,
-    WidgetRef ref,
   ) async {
     final taskId = _uuid.v4();
+    print('TaskManager: Created image task $taskId');
     final task = GenerationTask(
       id: taskId,
       type: TaskType.image,
@@ -107,8 +107,24 @@ class GenerationTaskManager {
     );
     
     await _addTask(task);
-    await _startImageTask(task, ref);
     return taskId;
+  }
+
+  Future<String> createImageTask(
+    String sessionId,
+    String prompt,
+    List<String>? base64Images,
+    WidgetRef ref,
+  ) async {
+    final taskId = await createImageTaskPending(sessionId, prompt, base64Images);
+    await _startImageTask(_tasks[taskId]!, ref);
+    return taskId;
+  }
+
+  Future<void> startImageTask(String taskId, WidgetRef ref) async {
+    final task = _tasks[taskId];
+    if (task == null) throw Exception('Task $taskId not found');
+    await _startImageTask(task, ref);
   }
 
   // 暂停任务
@@ -157,6 +173,7 @@ class GenerationTaskManager {
 
   // 内部方法：更新任务
   Future<void> _updateTask(GenerationTask task) async {
+    print('TaskManager: Updating task ${task.id} to ${task.status}');
     _tasks[task.id] = task;
     await _storage.updateTask(task);
     _notifyTaskUpdate(task);
@@ -164,6 +181,7 @@ class GenerationTaskManager {
 
   // 内部方法：通知任务更新
   void _notifyTaskUpdate(GenerationTask task) {
+    print('TaskManager: Notifying task ${task.id} status ${task.status}');
     _controllers[task.id]?.add(task);
   }
 
@@ -232,18 +250,24 @@ class GenerationTaskManager {
 
   // 内部方法：启动 Image 任务
   Future<void> _startImageTask(GenerationTask task, WidgetRef ref) async {
+    print('TaskManager: Starting image task ${task.id}');
     final updatedTask = task.copyWith(status: TaskStatus.running);
     await _updateTask(updatedTask);
+    print('TaskManager: Task ${task.id} set to running');
 
     try {
+      print('TaskManager: Getting generator');
       final generator = await ref.read(imageGeneratorProvider.future);
+      print('TaskManager: Generator ready');
       final prompt = task.params['prompt'] as String;
       final base64Images = task.params['base64Images'] as List<String>?;
+      print('TaskManager: Calling generateImage, prompt len: ${prompt.length}, images: ${base64Images?.length ?? 0}');
 
       final result = await generator.generateImage(
         prompt,
         base64Images: base64Images,
       );
+      print('TaskManager: generateImage done, bytes: ${result.imageBytes?.length ?? 0}');
 
       if (result.imageBytes != null) {
         final updatedTask = task.copyWith(
@@ -253,16 +277,19 @@ class GenerationTaskManager {
           currentResponse: result.description,
         );
         await _updateTask(updatedTask);
+        print('TaskManager: Task ${task.id} set to completed');
       } else {
         throw Exception('No image bytes returned');
       }
     } catch (e) {
+      print('TaskManager: Image task ${task.id} error: $e');
       final updatedTask = task.copyWith(
         status: TaskStatus.failed,
         completedAt: DateTime.now(),
         error: e.toString(),
       );
       await _updateTask(updatedTask);
+      print('TaskManager: Task ${task.id} set to failed');
     }
   }
 

@@ -104,48 +104,67 @@ class CustomImageGenerator implements ImageGenerator {
           parts = List<dynamic>.from(contentRaw);
         }
         if (parts.isNotEmpty) {
-          final imagePart = parts.first;
-          if (imagePart['type'] == 'image_url') {
-            final imageUrlObj = imagePart['image_url'];
-            if (imageUrlObj is Map<String, dynamic> && imageUrlObj['url'] is String) {
-              final imageUrl = imageUrlObj['url'] as String;
-              if (imageUrl.startsWith('data:image')) {
-                final base64Str = imageUrl.split(',')[1];
-                imageBytes = base64Decode(base64Str);
-              } else {
-                final imgResponse = await http.get(Uri.parse(imageUrl));
-                if (imgResponse.statusCode == 200) {
-                  imageBytes = imgResponse.bodyBytes;
-                } else {
-                  description = '下载远程图像失败: ${imgResponse.statusCode}';
+          bool foundImage = false;
+          for (var part in parts) {
+            if (!foundImage && imageBytes == null) {
+              if (part['type'] == 'image_url') {
+                final imageUrlObj = part['image_url'];
+                if (imageUrlObj is Map<String, dynamic> && imageUrlObj['url'] is String) {
+                  final imageUrl = imageUrlObj['url'] as String;
+                  if (imageUrl.startsWith('data:image')) {
+                    final base64Str = imageUrl.split(',')[1];
+                    imageBytes = base64Decode(base64Str);
+                  } else {
+                    final imgResponse = await http.get(Uri.parse(imageUrl));
+                    if (imgResponse.statusCode == 200) {
+                      imageBytes = imgResponse.bodyBytes;
+                    } else {
+                      description = '下载远程图像失败: ${imgResponse.statusCode}';
+                    }
+                  }
+                  foundImage = true;
+                }
+              } else if (part['inlineData'] != null) {
+                final inlineData = part['inlineData'];
+                final base64Str = inlineData['data'] as String?;
+                if (base64Str != null) {
+                  imageBytes = base64Decode(base64Str);
+                  foundImage = true;
                 }
               }
             }
-          }
-          for (var part in parts.skip(1)) {
             if (part['type'] == 'text' && part['text'] is String) {
-              description += '${part['text']}\n';
+              description += '${part['text']}\\n';
             }
           }
         } else if (contentRaw is String) {
-          description = contentRaw;
-          if (description.startsWith('data:image/')) {
-            final strParts = description.split(',');
-            if (strParts.length > 1) {
-              imageBytes = base64Decode(strParts[1]);
-            }
+          final dataUrlRegExp = RegExp(r'data:image/[a-zA-Z]+;base64,([A-Za-z0-9+/=]+)');
+          final match = dataUrlRegExp.firstMatch(contentRaw);
+          if (match != null) {
+            final base64Str = match.group(1)!;
+            imageBytes = base64Decode(base64Str);
+            description = contentRaw.replaceAll(RegExp(r'data:image/[a-zA-Z]+;base64,[A-Za-z0-9+/=]+'), '').trim();
+          } else if (contentRaw.trim().startsWith('iVBORw0KGgo')) {
+            imageBytes = base64Decode(contentRaw.trim());
+            description = '纯 base64 图像';
+          } else {
+            description = contentRaw;
           }
         } else {
           description = '响应格式不支持: ${contentRaw.runtimeType}';
         }
         if (imageBytes == null) {
-          throw Exception('图像生成失败：模型未返回有效图像数据。详情 - description: "$description", content: "$contentRaw", images: "${message['images']}"');
+          print('ImageGenerator: No image found - parts length: ${parts.length}, contentRaw type: ${contentRaw.runtimeType}');
+          throw Exception('图像生成失败：模型未返回有效图像数据。详情 - description: "$description", content type: ${contentRaw.runtimeType}');
         }
+        print('ImageGenerator: Parsed image success - bytes length: ${imageBytes!.length}, description length: ${description.length}');
         return ImageGenerationResult(imageBytes: imageBytes, description: description);
+      } else {
+        throw Exception('响应中没有 choices 或 choices 为空');
       }
     }
     print('ImageGenerator: HTTP Error ${response.statusCode}, body length: ${response.body.length}');
-    throw Exception('图像生成失败: HTTP ${response.statusCode}\n${response.body}');
+    throw Exception('图像生成失败: HTTP ${response.statusCode}\\n${response.body}');
   }
 }
 
