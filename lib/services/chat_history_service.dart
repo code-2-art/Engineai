@@ -127,9 +127,6 @@ class ChatHistoryService {
     final buffer = StringBuffer();
     buffer.writeln('# ${session.title}');
     buffer.writeln('Created at: ${session.createdAt}');
-    if (session.systemPrompt != null && session.systemPrompt!.isNotEmpty) {
-      buffer.writeln('System Prompt: ${session.systemPrompt}');
-    }
     buffer.writeln();
 
     for (final message in session.messages) {
@@ -141,8 +138,9 @@ class ChatHistoryService {
         continue;
       }
       final role = message.sender ?? (message.isUser ? 'User' : 'AI');
-      final timeStr = "${message.timestamp.hour.toString().padLeft(2, '0')}:${message.timestamp.minute.toString().padLeft(2, '0')}";
-      buffer.writeln('### $role ($timeStr)');
+      final timeStr = "${message.timestamp.year}-${message.timestamp.month.toString().padLeft(2, '0')}-${message.timestamp.day.toString().padLeft(2, '0')} ${message.timestamp.hour.toString().padLeft(2, '0')}:${message.timestamp.minute.toString().padLeft(2, '0')}";
+      final promptNameSuffix = message.promptName != null && !message.isUser ? ' • ${message.promptName}' : '';
+      buffer.writeln('### $role ($timeStr)$promptNameSuffix');
       buffer.writeln(message.text);
       buffer.writeln();
     }
