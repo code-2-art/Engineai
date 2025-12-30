@@ -122,8 +122,14 @@ class _AiChatState extends ConsumerState<AiChat> {
     final sessionId = ref.read(currentSessionIdProvider);
     if (sessionId == null) return;
     final currentModel = ref.read(chatCurrentModelProvider);
-    final aiMessage = Message(isUser: false, text: fullResponse, sender: currentModel);
     final session = ref.read(sessionListProvider).firstWhere((s) => s.id == sessionId);
+    final promptName = _getPromptName(session.systemPrompt);
+    final aiMessage = Message(
+      isUser: false,
+      text: fullResponse,
+      sender: currentModel,
+      promptName: promptName,
+    );
     await ref.read(sessionListProvider.notifier).updateSession(
       session.copyWith(messages: [...session.messages, aiMessage])
     );
@@ -610,6 +616,21 @@ $toolResp
     return message.text;
   }
 
+  String? _getPromptName(String? systemPromptContent) {
+    if (systemPromptContent == null || systemPromptContent.isEmpty) {
+      return null;
+    }
+    final prompts = ref.read(enabledSystemPromptsProvider);
+    final prompt = prompts.firstWhere(
+      (p) => p.content == systemPromptContent,
+      orElse: () => prompts.firstWhere(
+        (p) => p.content.contains(systemPromptContent) || systemPromptContent.contains(p.content),
+        orElse: () => SystemPrompt(name: '', content: ''),
+      ),
+    );
+    return prompt.name.isNotEmpty ? prompt.name : null;
+  }
+
   void _showImageViewer(Uint8List bytes) {
     showDialog(
       context: context,
@@ -787,7 +808,7 @@ $toolResp
                               Padding(
                                 padding: const EdgeInsets.only(bottom: 4, left: 4, right: 4),
                                 child: Text(
-                                  "${message.sender ?? (message.isUser ? '我' : 'AI')} • $timeStr",
+                                  "${message.sender ?? (message.isUser ? '我' : 'AI')}${message.promptName != null ? ' • ${message.promptName}' : ''} • $timeStr",
                                   style: TextStyle(
                                     fontSize: 11,
                                     color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
@@ -887,6 +908,7 @@ $toolResp
                         );
                       } else {
                         final currentModel = ref.watch(chatCurrentModelProvider);
+                        final promptName = _getPromptName(currentSession?.systemPrompt);
                         return Padding(
                           padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
                           child: Column(
@@ -895,7 +917,7 @@ $toolResp
                               Padding(
                                 padding: const EdgeInsets.only(bottom: 4, left: 4),
                                 child: Text(
-                                  "$currentModel • 正在输入...",
+                                  "$currentModel${promptName != null ? ' • $promptName' : ''} • 正在输入...",
                                   style: TextStyle(
                                     fontSize: 11,
                                     color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),

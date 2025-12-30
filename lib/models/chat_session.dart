@@ -9,6 +9,7 @@ class Message {
   final String? sender;
   final List<Map<String, dynamic>>? contentParts;
   final bool isSystem;
+  final String? promptName;
 
   Message({
     String? id,
@@ -18,6 +19,7 @@ class Message {
     this.sender,
     this.contentParts,
     this.isSystem = false,
+    this.promptName,
   })  : id = id ?? const Uuid().v4(),
         timestamp = timestamp ?? DateTime.now();
 
@@ -30,6 +32,7 @@ class Message {
       sender: json['sender'] as String?,
       contentParts: (json['contentParts'] as List?)?.cast<Map<String, dynamic>>(),
       isSystem: (json['isSystem'] as bool?) ?? false,
+      promptName: json['promptName'] as String?,
     );
   }
 
@@ -42,6 +45,7 @@ class Message {
       'sender': sender,
       if (contentParts != null) 'contentParts': contentParts!,
       'isSystem': isSystem,
+      if (promptName != null) 'promptName': promptName!,
     };
   }
 }
