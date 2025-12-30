@@ -164,6 +164,14 @@ class Application extends ConsumerWidget {
                           } else if (page == 'image') {
                             pageWidget = const ImagePage();
                           }
+                          
+                          // 监听页面变化，自动关闭侧边栏
+                          ref.listen<String>(currentPageProvider, (previous, next) {
+                            if (previous != null && previous != next) {
+                              ref.read(rightSidebarCollapsedProvider.notifier).state = true;
+                            }
+                          });
+                          
                           return GestureDetector(
                             onTap: () {
                               if (!rightCollapsed) {
