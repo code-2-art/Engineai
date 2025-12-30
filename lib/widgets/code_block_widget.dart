@@ -2,6 +2,47 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:markdown_widget/markdown_widget.dart';
 
+/// 修复未闭合的代码块
+/// 如果代码块缺少结束标记 ```，则自动添加
+String _fixUnclosedCodeBlocks(String text) {
+  final codeBlockRegex = RegExp(r'```(\w*)\n([\s\S]*?)(```|$)');
+  final matches = codeBlockRegex.allMatches(text);
+  
+  if (matches.isEmpty) return text;
+  
+  final buffer = StringBuffer();
+  int lastIndex = 0;
+  int openBlockCount = 0;
+  
+  for (final match in matches) {
+    // 添加代码块前的文本
+    if (match.start > lastIndex) {
+      buffer.write(text.substring(lastIndex, match.start));
+    }
+    
+    // 检查是否有结束标记
+    final endMarker = match.group(3);
+    if (endMarker == null || endMarker.isEmpty) {
+      // 没有结束标记，添加代码块并补全结束标记
+      final language = match.group(1) ?? '';
+      final code = match.group(2) ?? '';
+      buffer.write('```$language\n$code```');
+    } else {
+      // 有结束标记，原样添加
+      buffer.write(match.group(0));
+    }
+    
+    lastIndex = match.end;
+  }
+  
+  // 添加最后的文本
+  if (lastIndex < text.length) {
+    buffer.write(text.substring(lastIndex));
+  }
+  
+  return buffer.toString();
+}
+
 /// 自定义代码块组件，带有复制按钮
 class CodeBlockWithCopyButton extends StatelessWidget {
   final String text;
@@ -149,10 +190,13 @@ class MarkdownWidgetWithCopyButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 先修复未闭合的代码块
+    final fixedData = _fixUnclosedCodeBlocks(data);
+    
     // 使用正则表达式提取所有代码块
     // 不要求最后的换行符，确保能匹配 AI 生成的代码块
     final codeBlockRegex = RegExp(r'```(\w*)\n([\s\S]*?)```', multiLine: true, dotAll: true);
-    final matches = codeBlockRegex.allMatches(data);
+    final matches = codeBlockRegex.allMatches(fixedData);
     
     if (matches.isEmpty) {
       // 没有代码块，直接使用原始 MarkdownWidget
@@ -172,7 +216,7 @@ class MarkdownWidgetWithCopyButton extends StatelessWidget {
     for (final match in matches) {
       // 添加代码块前的文本
       if (match.start > lastIndex) {
-        final beforeText = data.substring(lastIndex, match.start);
+        final beforeText = fixedData.substring(lastIndex, match.start);
         if (beforeText.trim().isNotEmpty) {
           parts.add(
             MarkdownWidget(
@@ -203,8 +247,8 @@ class MarkdownWidgetWithCopyButton extends StatelessWidget {
     }
     
     // 添加最后的文本
-    if (lastIndex < data.length) {
-      final afterText = data.substring(lastIndex);
+    if (lastIndex < fixedData.length) {
+      final afterText = fixedData.substring(lastIndex);
       if (afterText.trim().isNotEmpty) {
         parts.add(
           MarkdownWidget(

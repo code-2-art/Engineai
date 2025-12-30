@@ -951,15 +951,35 @@ $toolResp
                                       ),
                                     ],
                                   ),
-                                  child: SelectableText(
-                                    currentResponse.isEmpty ? 'AI 正在思考...' : currentResponse,
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      height: 1.5,
-                                      color: Theme.of(context).colorScheme.onSecondaryContainer,
-                                      fontFamilyFallback: const ['Microsoft YaHei', 'SimSun', 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans CJK SC', 'Arial Unicode MS'],
-                                    ),
-                                  ),
+                                  child: currentResponse.isEmpty
+                                    ? Text(
+                                        'AI 正在思考...',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          height: 1.5,
+                                          color: Theme.of(context).colorScheme.onSecondaryContainer,
+                                          fontFamilyFallback: const ['Microsoft YaHei', 'SimSun', 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans CJK SC', 'Arial Unicode MS'],
+                                        ),
+                                      )
+                                    : Builder(
+                                        builder: (context) {
+                                          final textColor = Theme.of(context).colorScheme.onSecondaryContainer;
+                                          final isDark = Theme.of(context).brightness == Brightness.dark;
+                                          final config = isDark
+                                              ? MarkdownConfig.darkConfig
+                                              : MarkdownConfig.defaultConfig;
+                                          return DefaultTextStyle(
+                                            style: TextStyle(color: textColor),
+                                            child: MarkdownWidgetWithCopyButton(
+                                              data: currentResponse,
+                                              config: config,
+                                              selectable: true,
+                                              shrinkWrap: true,
+                                              physics: const NeverScrollableScrollPhysics(),
+                                            ),
+                                          );
+                                        },
+                                      ),
                                   ),
                                 ),
                             ],
