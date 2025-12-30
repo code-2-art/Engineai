@@ -6,8 +6,9 @@ class ImageMessage {
   final Uint8List image;
   final String? aiDescription;
   final DateTime timestamp;
+  final bool isSeparator;
 
-  ImageMessage(this.prompt, this.image, this.aiDescription, [DateTime? timestamp]) : timestamp = timestamp ?? DateTime.now();
+  ImageMessage(this.prompt, this.image, this.aiDescription, [DateTime? timestamp, this.isSeparator = false]) : timestamp = timestamp ?? DateTime.now();
 
   factory ImageMessage.fromJson(Map<String, dynamic> json) {
     final prompt = json['prompt'] as String;
@@ -16,7 +17,8 @@ class ImageMessage {
     final aiDescription = json['aiDescription'] as String?;
     final timestampStr = json['timestamp'] as String;
     final timestamp = DateTime.parse(timestampStr);
-    return ImageMessage(prompt, image, aiDescription, timestamp);
+    final isSeparator = (json['isSeparator'] as bool?) ?? false;
+    return ImageMessage(prompt, image, aiDescription, timestamp, isSeparator);
   }
 
   Map<String, dynamic> toJson() {
@@ -25,6 +27,7 @@ class ImageMessage {
       'imageBase64': base64Encode(image),
       'aiDescription': aiDescription,
       'timestamp': timestamp.toIso8601String(),
+      'isSeparator': isSeparator,
     };
   }
 }

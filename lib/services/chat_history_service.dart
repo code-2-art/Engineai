@@ -5,12 +5,32 @@ import '../models/chat_session.dart';
 class ChatHistoryService {
   static const String _boxName = 'chat_history';
   static const String _key = 'sessions';
+  
+  Box? _cachedBox;
 
   Future<Box> _getBox() async {
-    if (!Hive.isBoxOpen(_boxName)) {
-      return await Hive.openBox(_boxName);
+    if (_cachedBox != null && _cachedBox!.isOpen) {
+      return _cachedBox!;
     }
-    return Hive.box(_boxName);
+    if (!Hive.isBoxOpen(_boxName)) {
+      _cachedBox = await Hive.openBox(_boxName);
+    } else {
+      _cachedBox = Hive.box(_boxName);
+    }
+    return _cachedBox!;
+  }
+  
+  /// 清理资源，关闭 Hive box
+  Future<void> dispose() async {
+    try {
+      if (_cachedBox != null && _cachedBox!.isOpen) {
+        await _cachedBox!.close();
+        _cachedBox = null;
+        print('ChatHistoryService: Box closed');
+      }
+    } catch (e) {
+      print('ChatHistoryService: Error closing box: $e');
+    }
   }
 
   Future<List<ChatSession>> getSessions() async {

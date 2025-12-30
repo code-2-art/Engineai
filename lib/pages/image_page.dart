@@ -188,7 +188,16 @@ class _ImagePageState extends ConsumerState<ImagePage> {
     // 创建任务
     final taskManager = ref.read(taskManagerProvider);
     List<String> base64Images = [];
-    for (final msg in currentSession.messages.sublist(0, currentSession.messages.length - 1)) {
+    
+    // 查找最后一个分隔符
+    final lastSeparatorIndex = currentSession.messages.lastIndexWhere((msg) => msg.isSeparator);
+    
+    // 只使用最后一个分隔符之后的图片
+    final messagesToUse = lastSeparatorIndex == -1
+        ? currentSession.messages.sublist(0, currentSession.messages.length - 1)
+        : currentSession.messages.sublist(lastSeparatorIndex + 1, currentSession.messages.length - 1);
+    
+    for (final msg in messagesToUse) {
       if (msg.image.isNotEmpty) {
         base64Images.add(base64Encode(msg.image));
       }
@@ -456,6 +465,31 @@ class _ImagePageState extends ConsumerState<ImagePage> {
                     itemBuilder: (context, index) {
                       final reversedIndex = messages.length - 1 - index;
                       final msg = messages[reversedIndex];
+                      
+                      // 显示分隔符
+                      if (msg.isSeparator) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
+                          child: Row(
+                            children: [
+                              Expanded(child: Divider(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2), thickness: 1)),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                child: Text(
+                                  '上下文已清除',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                              Expanded(child: Divider(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2), thickness: 1)),
+                            ],
+                          ),
+                        );
+                      }
+                      
                       final timeStr = "${msg.timestamp.year}-${msg.timestamp.month.toString().padLeft(2, '0')}-${msg.timestamp.day.toString().padLeft(2, '0')} ${msg.timestamp.hour.toString().padLeft(2, '0')}:${msg.timestamp.minute.toString().padLeft(2, '0')}";
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
@@ -732,9 +766,7 @@ class _ImagePageState extends ConsumerState<ImagePage> {
                               icon: const Icon(Icons.upload_file, size: 14),
                               tooltip: '上传参考图片',
                               constraints: const BoxConstraints(
-                                minWidth: 32,
                                 maxWidth: 32,
-                                minHeight: 32,
                                 maxHeight: 32,
                               ),
                               padding: EdgeInsets.zero,
@@ -743,6 +775,39 @@ class _ImagePageState extends ConsumerState<ImagePage> {
                                 hoverColor: Theme.of(context).colorScheme.primary.withOpacity(0.08),
                               ),
                               onPressed: _uploadImage,
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton(
+                              icon: const Icon(Icons.cleaning_services_outlined, size: 14),
+                              tooltip: '清除上下文',
+                              constraints: const BoxConstraints(
+                                maxWidth: 32,
+                                maxHeight: 32,
+                              ),
+                              padding: EdgeInsets.zero,
+                              style: IconButton.styleFrom(
+                                shape: const CircleBorder(),
+                                hoverColor: Theme.of(context).colorScheme.primary.withOpacity(0.08),
+                              ),
+                              onPressed: () async {
+                                var localSessionId = ref.read(currentImageSessionIdProvider);
+                                if (localSessionId == null) {
+                                  final newSession = await ref.read(imageSessionListProvider.notifier).createNewSession();
+                                  ref.read(currentImageSessionIdProvider.notifier).setSessionId(newSession.id);
+                                  localSessionId = newSession.id;
+                                }
+                                await ref.read(imageSessionListProvider.notifier).addSeparator(localSessionId!);
+                                _promptController.clear();
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('上下文已清除'),
+                                      behavior: SnackBarBehavior.floating,
+                                      width: 200,
+                                    ),
+                                  );
+                                }
+                              },
                             ),
                           ],
                         ),

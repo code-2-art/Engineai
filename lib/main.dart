@@ -1,25 +1,27 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:forui/forui.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:file_picker/file_picker.dart';
 import 'services/system_prompt_service.dart';
+import 'services/llm_provider.dart';
+import 'services/session_provider.dart';
+import 'services/shared_prefs_service.dart';
+import 'services/chat_history_service.dart';
+import 'services/image_history_service.dart';
+import 'services/generation_task_manager.dart';
+import 'services/resource_manager.dart';
 import 'pages/ai_chat.dart';
 import 'pages/settings_page.dart';
 import 'pages/image_page.dart';
-import 'services/llm_provider.dart';
-import 'services/session_provider.dart';
+import 'widgets/history_list.dart';
 import 'models/chat_session.dart';
 import 'theme/theme.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'services/shared_prefs_service.dart';
-import 'package:share_plus/share_plus.dart';
-import 'package:file_picker/file_picker.dart';
-import 'dart:io';
-import 'package:flutter/foundation.dart';
-import 'services/chat_history_service.dart';
-import 'widgets/history_list.dart';
-import 'services/generation_task_manager.dart';
 
 void main() async {
   print('=== MAIN START ===');
@@ -55,12 +57,59 @@ void main() async {
   unawaited(taskManager.init());
   print('=== TASK MANAGER INIT DONE ===');
 
+  // 初始化资源管理器
+  final chatHistoryService = ChatHistoryService();
+  final imageHistoryService = ImageHistoryService();
+  initializeResourceManager(
+    container,
+    chatHistoryService: chatHistoryService,
+    imageHistoryService: imageHistoryService,
+  );
+
+  // 监听应用生命周期，在应用退出时清理资源
+  _setupAppLifecycleObserver(container);
+
   runApp(
     UncontrolledProviderScope(
       container: container,
       child: const Application(),
     ),
   );
+}
+
+/// 设置应用生命周期监听
+void _setupAppLifecycleObserver(ProviderContainer container) {
+  final observer = _AppLifecycleObserver(container);
+  WidgetsBinding.instance.addObserver(observer);
+}
+
+/// 应用生命周期观察器
+class _AppLifecycleObserver with WidgetsBindingObserver {
+  final ProviderContainer container;
+  bool _isExiting = false;
+
+  _AppLifecycleObserver(this.container);
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    print('=== APP LIFECYCLE: $state ===');
+    
+    if (state == AppLifecycleState.detached && !_isExiting) {
+      _isExiting = true;
+      print('=== APP LIFECYCLE: App is exiting, cleaning up resources ===');
+      _cleanupResources();
+    }
+  }
+
+  Future<void> _cleanupResources() async {
+    try {
+      final resourceManager = container.read(resourceManagerProvider);
+      await resourceManager.dispose();
+      print('=== APP LIFECYCLE: Resources cleaned up successfully ===');
+    } catch (e) {
+      print('=== APP LIFECYCLE: Error during cleanup: $e ===');
+    }
+  }
 }
 
 class Application extends ConsumerWidget {

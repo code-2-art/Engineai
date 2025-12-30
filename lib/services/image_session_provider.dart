@@ -1,6 +1,8 @@
+import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../models/image_session.dart';
+import '../models/image_message.dart';
 import 'image_history_service.dart';
 import 'shared_prefs_service.dart';
 
@@ -42,6 +44,16 @@ class ImageSessionNotifier extends StateNotifier<List<ImageSession>> {
         if (session.id == id) session.copyWith(title: newTitle) else session
     ];
     await _service.saveSessions(state);
+  }
+
+  Future<void> addSeparator(String id) async {
+    final index = state.indexWhere((s) => s.id == id);
+    if (index != -1) {
+      final separator = ImageMessage('--- 上下文已清除 ---', Uint8List(0), null, DateTime.now(), true);
+      final updated = state[index].copyWith(messages: [...state[index].messages, separator]);
+      state = [...state.map((s) => s.id == id ? updated : s)];
+      await _service.saveSessions(state);
+    }
   }
 
   Future<void> deleteSession(String id) async {

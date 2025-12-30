@@ -1129,36 +1129,6 @@ $toolResp
                               },
                             ),
                             const SizedBox(width: 8),
-                            IconButton(
-                              icon: const Icon(Icons.cleaning_services_outlined, size: 14),
-                              tooltip: '清除上下文',
-                              constraints: const BoxConstraints(
-                                maxWidth: 32,
-                                maxHeight: 32,
-                              ),
-                              padding: EdgeInsets.zero,
-                              style: IconButton.styleFrom(
-                                shape: const CircleBorder(),
-                                hoverColor: Theme.of(context).colorScheme.primary.withOpacity(0.08),
-                              ),
-                              onPressed: () async {
-                                var localSessionId = ref.read(currentSessionIdProvider);
-                                if (localSessionId == null) {
-                                  final newSession = await ref.read(sessionListProvider.notifier).createNewSession();
-                                  ref.read(currentSessionIdProvider.notifier).setSessionId(newSession.id);
-                                  localSessionId = newSession.id;
-                                }
-                                ref.read(sessionListProvider.notifier).addSeparator(localSessionId!);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('上下文已清除'),
-                                    behavior: SnackBarBehavior.floating,
-                                    width: 200,
-                                  ),
-                                );
-                              },
-                            ),
-                            const SizedBox(width: 8),
                             Consumer(
                               builder: (context, ref, child) {
                                 final namesAsync = ref.watch(chatModelNamesProvider);
@@ -1306,6 +1276,36 @@ $toolResp
                                     constraints: const BoxConstraints(maxWidth: 32, maxHeight: 32),
                                     padding: EdgeInsets.zero,
                                     onPressed: null,
+                                  ),
+                                );
+                              },
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton(
+                              icon: const Icon(Icons.cleaning_services_outlined, size: 14),
+                              tooltip: '清除上下文',
+                              constraints: const BoxConstraints(
+                                maxWidth: 32,
+                                maxHeight: 32,
+                              ),
+                              padding: EdgeInsets.zero,
+                              style: IconButton.styleFrom(
+                                shape: const CircleBorder(),
+                                hoverColor: Theme.of(context).colorScheme.primary.withOpacity(0.08),
+                              ),
+                              onPressed: () async {
+                                var localSessionId = ref.read(currentSessionIdProvider);
+                                if (localSessionId == null) {
+                                  final newSession = await ref.read(sessionListProvider.notifier).createNewSession();
+                                  ref.read(currentSessionIdProvider.notifier).setSessionId(newSession.id);
+                                  localSessionId = newSession.id;
+                                }
+                                ref.read(sessionListProvider.notifier).addSeparator(localSessionId!);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('上下文已清除'),
+                                    behavior: SnackBarBehavior.floating,
+                                    width: 200,
                                   ),
                                 );
                               },
