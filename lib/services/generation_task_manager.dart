@@ -18,6 +18,13 @@ class GenerationTaskManager {
   final Map<String, GenerationTask> _tasks = {};
   final Map<String, StreamController<GenerationTask>> _controllers = {};
   final Map<String, StreamSubscription> _subscriptions = {};
+  
+  // 防抖和批量更新
+  final Map<String, Timer> _debounceTimers = {};
+  final Map<String, String> _pendingResponses = {};
+  final Map<String, Timer> _storageTimers = {};
+  static const _debounceDelay = Duration(milliseconds: 50); // UI更新防抖
+  static const _storageDelay = Duration(milliseconds: 500); // 存储写入防抖
 
   GenerationTaskManager(this._storage);
 
@@ -208,32 +215,69 @@ class GenerationTaskManager {
           final currentTask = _tasks[task.id];
           if (currentTask == null) return;
           
-          final newResponse = (currentTask.currentResponse ?? '') + delta;
-          final updatedTask = currentTask.copyWith(currentResponse: newResponse);
-          _updateTask(updatedTask);
+          // 累积响应内容
+          _pendingResponses[task.id] = (_pendingResponses[task.id] ?? currentTask.currentResponse ?? '') + delta;
+          
+          // 防抖：延迟更新UI和存储
+          _debounceTimers[task.id]?.cancel();
+          _debounceTimers[task.id] = Timer(_debounceDelay, () {
+            final newResponse = _pendingResponses[task.id] ?? '';
+            if (newResponse.isNotEmpty) {
+              final updatedTask = currentTask.copyWith(currentResponse: newResponse);
+              _tasks[task.id] = updatedTask;
+              _notifyTaskUpdate(updatedTask);
+              
+              // 延迟存储到磁盘，避免频繁IO
+              _storageTimers[task.id]?.cancel();
+              _storageTimers[task.id] = Timer(_storageDelay, () {
+                _storage.updateTask(updatedTask);
+              });
+            }
+          });
         },
         onDone: () async {
+          // 取消所有定时器
+          _debounceTimers[task.id]?.cancel();
+          _storageTimers[task.id]?.cancel();
+          
           final currentTask = _tasks[task.id];
           if (currentTask == null) return;
+          
+          // 确保最后的响应被保存
+          final finalResponse = _pendingResponses[task.id] ?? currentTask.currentResponse ?? '';
+          _pendingResponses.remove(task.id);
           
           final updatedTask = currentTask.copyWith(
             status: TaskStatus.completed,
             completedAt: DateTime.now(),
+            currentResponse: finalResponse,
           );
           await _updateTask(updatedTask);
           _subscriptions.remove(task.id);
+          _debounceTimers.remove(task.id);
+          _storageTimers.remove(task.id);
         },
         onError: (e) async {
+          // 取消所有定时器
+          _debounceTimers[task.id]?.cancel();
+          _storageTimers[task.id]?.cancel();
+          
           final currentTask = _tasks[task.id];
           if (currentTask == null) return;
+          
+          final finalResponse = _pendingResponses[task.id] ?? currentTask.currentResponse ?? '';
+          _pendingResponses.remove(task.id);
           
           final updatedTask = currentTask.copyWith(
             status: TaskStatus.failed,
             completedAt: DateTime.now(),
             error: e.toString(),
+            currentResponse: finalResponse,
           );
           await _updateTask(updatedTask);
           _subscriptions.remove(task.id);
+          _debounceTimers.remove(task.id);
+          _storageTimers.remove(task.id);
         },
       );
 
@@ -310,8 +354,17 @@ class GenerationTaskManager {
     for (final subscription in _subscriptions.values) {
       subscription.cancel();
     }
+    for (final timer in _debounceTimers.values) {
+      timer.cancel();
+    }
+    for (final timer in _storageTimers.values) {
+      timer.cancel();
+    }
     _controllers.clear();
     _subscriptions.clear();
+    _debounceTimers.clear();
+    _storageTimers.clear();
+    _pendingResponses.clear();
   }
 }
 
