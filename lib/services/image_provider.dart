@@ -134,7 +134,12 @@ class CustomImageGenerator implements ImageGenerator {
               }
             }
             if (part['type'] == 'text' && part['text'] is String) {
-              description += '${part['text']}\\n';
+              // 过滤掉 markdown 图片语法（如 ![image]()），只保留真正的描述文本
+              final text = part['text'] as String;
+              final cleanText = text.replaceAll(RegExp(r'!\[([^\]]*)\]\(([^)]*)\)'), '');
+              if (cleanText.trim().isNotEmpty) {
+                description += '$cleanText\\n';
+              }
             }
           }
         } else if (contentRaw is String) {
@@ -143,12 +148,17 @@ class CustomImageGenerator implements ImageGenerator {
           if (match != null) {
             final base64Str = match.group(1)!;
             imageBytes = base64Decode(base64Str);
-            description = contentRaw.replaceAll(RegExp(r'data:image/[a-zA-Z]+;base64,[A-Za-z0-9+/=]+'), '').trim();
+            // 过滤掉 markdown 图片语法，只保留真正的描述文本
+            description = contentRaw
+                .replaceAll(RegExp(r'data:image/[a-zA-Z]+;base64,[A-Za-z0-9+/=]+'), '')
+                .replaceAll(RegExp(r'!\[([^\]]*)\]\(([^)]*)\)'), '')
+                .trim();
           } else if (contentRaw.trim().startsWith('iVBORw0KGgo')) {
             imageBytes = base64Decode(contentRaw.trim());
             description = '纯 base64 图像';
           } else {
-            description = contentRaw;
+            // 过滤掉 markdown 图片语法，只保留真正的描述文本
+            description = contentRaw.replaceAll(RegExp(r'!\[([^\]]*)\]\(([^)]*)\)'), '');
           }
         } else {
           description = '响应格式不支持: ${contentRaw.runtimeType}';
