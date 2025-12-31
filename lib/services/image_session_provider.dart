@@ -12,11 +12,16 @@ class ImageSessionNotifier extends StateNotifier<List<ImageSession>> {
   final ImageHistoryService _service;
 
   ImageSessionNotifier(this._service) : super([]) {
+    // 异步加载会话，避免阻塞UI线程
     _loadSessions();
   }
 
   Future<void> _loadSessions() async {
-    state = await _service.getSessions();
+    try {
+      state = await _service.getSessions();
+    } catch (e) {
+      print('ImageSessionNotifier: Failed to load sessions: $e');
+    }
   }
 
   Future<ImageSession> createNewSession() async {

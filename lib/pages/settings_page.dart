@@ -13,6 +13,7 @@ import '../services/llm_provider.dart';
 import '../models/llm_configs.dart';
 import '../services/mcp_provider.dart';
 import '../models/mcp_config.dart';
+import '../services/notification_provider.dart';
 import 'package:mcp_client/mcp_client.dart';
 
 
@@ -340,16 +341,12 @@ class LLMSettings extends ConsumerWidget {
                     if (tempController.text.trim().isNotEmpty) {
                       temperature = double.tryParse(tempController.text.trim());
                       if (temperature == null || temperature < 0.0 || temperature > 2.0) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Temperature 必须在 0.0 到 2.0 之间')),
-                        );
+                        ref.read(notificationServiceProvider).showError('Temperature 必须在 0.0 到 2.0 之间');
                         return;
                       }
                     }
                     if (selectedTypes.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('必须选择至少一种模型类型')),
-                      );
+                      ref.read(notificationServiceProvider).showError('必须选择至少一种模型类型');
                       return;
                     }
                     if (nameController.text.isNotEmpty && modelIdController.text.isNotEmpty) {
@@ -395,16 +392,12 @@ class LLMSettings extends ConsumerWidget {
         await file.writeAsString(jsonString);
         
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('配置已保存到硬盘')),
-          );
+          ref.read(notificationServiceProvider).showSuccess('配置已保存到硬盘');
         }
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('导出失败: $e')),
-        );
+        ref.read(notificationServiceProvider).showError('导出失败: $e');
       }
     }
   }
@@ -490,16 +483,12 @@ class LLMSettings extends ConsumerWidget {
         await ref.read(configProvider.notifier).importFromJson(jsonData, merge: shouldMerge);
         
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(shouldMerge ? '配置已合并' : '配置已覆盖')),
-          );
+          ref.read(notificationServiceProvider).showSuccess(shouldMerge ? '配置已合并' : '配置已覆盖');
         }
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('导入失败: $e')),
-        );
+        ref.read(notificationServiceProvider).showError('导入失败: $e');
       }
     }
   }
@@ -788,16 +777,12 @@ class _SystemPromptSettingsState extends ConsumerState<SystemPromptSettings> {
         await file.writeAsString(markdown);
         
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('提示词已导出')),
-          );
+          ref.read(notificationServiceProvider).showSuccess('提示词已导出');
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('导出失败: $e')),
-        );
+        ref.read(notificationServiceProvider).showError('导出失败: $e');
       }
     }
   }
@@ -819,15 +804,11 @@ class _SystemPromptSettingsState extends ConsumerState<SystemPromptSettings> {
       await notifier.addPrompt(prompt);
       
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('提示词已导入')),
-        );
+        ref.read(notificationServiceProvider).showSuccess('提示词已导入');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('导入失败: $e')),
-        );
+        ref.read(notificationServiceProvider).showError('导入失败: $e');
       }
     }
   }
@@ -1173,16 +1154,12 @@ class _MCPSettingsState extends ConsumerState<MCPSettings> {
         await file.writeAsString(jsonString);
         
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('MCP 配置已保存到硬盘')),
-          );
+          ref.read(notificationServiceProvider).showSuccess('MCP 配置已保存到硬盘');
         }
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('导出失败: $e')),
-        );
+        ref.read(notificationServiceProvider).showError('导出失败: $e');
       }
     }
   }
@@ -1268,16 +1245,12 @@ class _MCPSettingsState extends ConsumerState<MCPSettings> {
         await ref.read(mcpConfigProvider.notifier).importFromJson(jsonData, merge: shouldMerge);
         
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(shouldMerge ? 'MCP 配置已合并' : 'MCP 配置已覆盖')),
-          );
+          ref.read(notificationServiceProvider).showSuccess(shouldMerge ? 'MCP 配置已合并' : 'MCP 配置已覆盖');
         }
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('导入失败: $e')),
-        );
+        ref.read(notificationServiceProvider).showError('导入失败: $e');
       }
     }
   }

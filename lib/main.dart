@@ -16,6 +16,8 @@ import 'services/chat_history_service.dart';
 import 'services/image_history_service.dart';
 import 'services/generation_task_manager.dart';
 import 'services/resource_manager.dart';
+import 'services/notification_provider.dart';
+import 'services/notification_service.dart';
 import 'pages/ai_chat.dart';
 import 'pages/settings_page.dart';
 import 'pages/image_page.dart';
@@ -45,6 +47,9 @@ void main() async {
   unawaited(container.read(configProvider.future));
   print('=== CHAT LLM PROVIDER PREWARM START ===');
   unawaited(container.read(chatLlmProvider.future));
+  print('=== IMAGE MODEL NAMES PROVIDER PREWARM START ===');
+  unawaited(container.read(imageModelNamesProvider.future));
+  print('=== IMAGE MODEL NAMES PROVIDER PREWARM DONE ===');
 
   print('=== SYSTEM PROMPT PREWARM START ===');
   unawaited(container.read(systemPromptNotifierProvider.notifier).ensureInit());
@@ -153,6 +158,13 @@ class Application extends ConsumerWidget {
 
             return Stack(
               children: [
+                // 通知覆盖层
+                Consumer(
+                  builder: (context, ref, child) {
+                    final notificationService = ref.watch(notificationServiceProvider);
+                    return NotificationOverlay(service: notificationService);
+                  },
+                ),
                 Row(
                   children: [
                     // 左侧纯图标栏，固定宽度36，紧凑精致样式

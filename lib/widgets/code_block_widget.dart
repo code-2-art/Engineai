@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:markdown_widget/markdown_widget.dart';
+import '../services/notification_provider.dart';
 
 /// 修复未闭合的代码块
 /// 如果代码块缺少结束标记 ```，则自动添加
@@ -44,7 +46,7 @@ String _fixUnclosedCodeBlocks(String text) {
 }
 
 /// 自定义代码块组件，带有复制按钮
-class CodeBlockWithCopyButton extends StatelessWidget {
+class CodeBlockWithCopyButton extends ConsumerWidget {
   final String text;
   final String language;
 
@@ -55,7 +57,7 @@ class CodeBlockWithCopyButton extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     
@@ -113,7 +115,7 @@ class CodeBlockWithCopyButton extends StatelessWidget {
                 ),
                 // 复制按钮
                 InkWell(
-                  onTap: () => _copyToClipboard(context),
+                  onTap: () => _copyToClipboard(context, ref),
                   borderRadius: BorderRadius.circular(4),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -158,16 +160,9 @@ class CodeBlockWithCopyButton extends StatelessWidget {
     );
   }
 
-  void _copyToClipboard(BuildContext context) {
+  void _copyToClipboard(BuildContext context, WidgetRef ref) {
     Clipboard.setData(ClipboardData(text: text));
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('已复制到剪贴板'),
-        behavior: SnackBarBehavior.floating,
-        width: 200,
-        duration: Duration(seconds: 2),
-      ),
-    );
+    ref.read(notificationServiceProvider).showSuccess('已复制到剪贴板');
   }
 }
 

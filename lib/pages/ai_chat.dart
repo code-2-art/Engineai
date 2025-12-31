@@ -24,6 +24,7 @@ import '../models/system_prompt.dart';
 import '../services/system_prompt_service.dart';
 import '../services/generation_task_manager.dart';
 import '../models/generation_task.dart';
+import '../services/notification_provider.dart';
 
 final currentResponseProvider = StateProvider<String>((ref) => '');
 
@@ -88,9 +89,7 @@ class _AiChatState extends ConsumerState<AiChat> {
       
       // 处理任务失败
       if (task.status == TaskStatus.failed) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('生成失败: ${task.error}')),
-        );
+        ref.read(notificationServiceProvider).showError('生成失败: ${task.error}');
         setState(() {
           _isSending = false;
         });
@@ -151,13 +150,7 @@ class _AiChatState extends ConsumerState<AiChat> {
       });
     }
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('已停止生成'),
-          behavior: SnackBarBehavior.floating,
-          width: 200,
-        ),
-      );
+      ref.read(notificationServiceProvider).showInfo('已停止生成');
     }
   }
 
@@ -430,12 +423,7 @@ $decidePrompt
             
             if (!toolSuccess || toolResp.isEmpty) {
               if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: const Text('工具调用多次失败，请检查参数或网络'),
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
+                ref.read(notificationServiceProvider).showError('工具调用多次失败，请检查参数或网络');
               }
               return;
             }
@@ -491,9 +479,7 @@ $toolResp
               onError: (e) {
                 print('AiChat: Tool analysis stream error: $e');
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('分析失败: $e')),
-                  );
+                  ref.read(notificationServiceProvider).showError('分析失败: $e');
                 }
                 _resetSendingState();
               },
@@ -558,9 +544,7 @@ $toolResp
           } catch (e) {
             print('AiChat: MCP 生成失败: $e');
             if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('MCP 生成失败，fallback 到 LLM: $e')),
-              );
+              ref.read(notificationServiceProvider).showWarning('MCP 生成失败，fallback 到 LLM: $e');
             }
           }
         } else {
@@ -571,9 +555,7 @@ $toolResp
     } catch (e) {
       print('AiChat: _sendMessage error: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('发送失败: $e')),
-        );
+        ref.read(notificationServiceProvider).showError('发送失败: $e');
       }
       _resetSendingState();
     }
@@ -880,9 +862,7 @@ $toolResp
                                             constraints: const BoxConstraints(),
                                             onPressed: () {
                                               Clipboard.setData(ClipboardData(text: displayText));
-                                              ScaffoldMessenger.of(context).showSnackBar(
-                                                const SnackBar(content: Text('已复制到剪贴板'), behavior: SnackBarBehavior.floating, width: 200),
-                                              );
+                                              ref.read(notificationServiceProvider).showSuccess('已复制到剪贴板');
                                             },
                                             tooltip: '复制',
                                             style: IconButton.styleFrom(
@@ -1322,13 +1302,7 @@ $toolResp
                                   localSessionId = newSession.id;
                                 }
                                 ref.read(sessionListProvider.notifier).addSeparator(localSessionId!);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('上下文已清除'),
-                                    behavior: SnackBarBehavior.floating,
-                                    width: 200,
-                                  ),
-                                );
+                                ref.read(notificationServiceProvider).showSuccess('上下文已清除');
                               },
                             ),
                             const SizedBox(width: 8),

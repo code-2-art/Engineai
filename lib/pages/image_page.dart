@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:forui/forui.dart';
@@ -15,6 +16,7 @@ import '../models/image_message.dart';
 import '../models/image_session.dart';
 import '../services/generation_task_manager.dart';
 import '../models/generation_task.dart';
+import '../services/notification_provider.dart';
 
 
 class ImagePage extends ConsumerStatefulWidget {
@@ -29,6 +31,10 @@ class _ImagePageState extends ConsumerState<ImagePage> {
   final ScrollController _scrollController = ScrollController();
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   String? _currentTaskId;
+  
+  // 防抖定时器，用于UI更新
+  Timer? _debounceTimer;
+  static const _debounceDelay = Duration(milliseconds: 50);
 
   Widget _buildModelSelector(BuildContext context, WidgetRef ref) {
     final namesAsync = ref.watch(imageModelNamesProvider);
@@ -103,48 +109,73 @@ class _ImagePageState extends ConsumerState<ImagePage> {
       print('ImagePage: Task $taskId update status: ${task.status}');
       if (!mounted) return;
       
-      // 处理任务完成
-      if (task.status == TaskStatus.completed && task.generatedImage != null) {
-        print('ImagePage: Task completed, updating session');
-        final currentSession = ref.read(currentImageSessionProvider);
-        if (currentSession != null) {
-          final messagePrompt = currentSession.messages.last.prompt;
-          final realMsg = ImageMessage(
-            messagePrompt,
-            task.generatedImage!,
-            task.currentResponse,
-          );
-          final newMessages = List<ImageMessage>.from(currentSession.messages);
-          newMessages[newMessages.length - 1] = realMsg;
-          final updatedSession = currentSession.copyWith(messages: newMessages);
-          ref.read(imageSessionListProvider.notifier).updateSession(updatedSession);
-          _scrollToBottom();
-        }
-        _currentTaskId = null;
-      }
+      // 取消之前的防抖定时器
+      _debounceTimer?.cancel();
       
-      // 处理任务失败
-      if (task.status == TaskStatus.failed) {
-        print('ImagePage: Task failed, error: ${task.error}');
-        // 移除加载消息
-        final currentSession = ref.read(currentImageSessionProvider);
-        if (currentSession != null) {
-          final newMessages = currentSession.messages.sublist(0, currentSession.messages.length - 1);
-          final updatedSession = currentSession.copyWith(messages: newMessages);
-          ref.read(imageSessionListProvider.notifier).updateSession(updatedSession);
+      // 使用防抖延迟处理UI更新
+      _debounceTimer = Timer(_debounceDelay, () {
+        if (!mounted) return;
+        
+        // 处理任务完成
+        if (task.status == TaskStatus.completed && task.generatedImage != null) {
+          print('ImagePage: Task completed, updating session');
+          final currentSession = ref.read(currentImageSessionProvider);
+          if (currentSession != null) {
+            final messagePrompt = currentSession.messages.last.prompt;
+            final realMsg = ImageMessage(
+              messagePrompt,
+              task.generatedImage!,
+              task.currentResponse,
+            );
+            final newMessages = List<ImageMessage>.from(currentSession.messages);
+            newMessages[newMessages.length - 1] = realMsg;
+            final updatedSession = currentSession.copyWith(messages: newMessages);
+            ref.read(imageSessionListProvider.notifier).updateSession(updatedSession);
+            
+            // 使用PostFrameCallback确保UI更新后再滚动
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) {
+                _scrollToBottom();
+              }
+            });
+          }
+          _currentTaskId = null;
         }
         
-        if (mounted) {
-          services.Clipboard.setData(services.ClipboardData(text: task.error ?? ''));
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('生成失败，错误详情已复制到剪贴板'),
-              duration: const Duration(seconds: 4),
-            ),
-          );
+        // 处理任务失败
+        if (task.status == TaskStatus.failed) {
+          print('ImagePage: Task failed, error: ${task.error}');
+          // 移除加载消息
+          final currentSession = ref.read(currentImageSessionProvider);
+          if (currentSession != null) {
+            final newMessages = currentSession.messages.sublist(0, currentSession.messages.length - 1);
+            final updatedSession = currentSession.copyWith(messages: newMessages);
+            ref.read(imageSessionListProvider.notifier).updateSession(updatedSession);
+          }
+          
+          if (mounted) {
+            services.Clipboard.setData(services.ClipboardData(text: task.error ?? ''));
+            ref.read(notificationServiceProvider).showError('生成失败，错误详情已复制到剪贴板');
+          }
+          _currentTaskId = null;
         }
-        _currentTaskId = null;
-      }
+        
+        // 处理任务取消
+        if (task.status == TaskStatus.cancelled) {
+          print('ImagePage: Task cancelled');
+          // 移除加载消息
+          final currentSession = ref.read(currentImageSessionProvider);
+          if (currentSession != null && currentSession.messages.isNotEmpty) {
+            final lastMessage = currentSession.messages.last;
+            if (lastMessage.image.isEmpty) {
+              final newMessages = currentSession.messages.sublist(0, currentSession.messages.length - 1);
+              final updatedSession = currentSession.copyWith(messages: newMessages);
+              ref.read(imageSessionListProvider.notifier).updateSession(updatedSession);
+            }
+          }
+          _currentTaskId = null;
+        }
+      });
     });
   }
 
@@ -152,6 +183,7 @@ class _ImagePageState extends ConsumerState<ImagePage> {
   void dispose() {
     _promptController.dispose();
     _scrollController.dispose();
+    _debounceTimer?.cancel();
     super.dispose();
   }
 
@@ -306,9 +338,7 @@ class _ImagePageState extends ConsumerState<ImagePage> {
       final file = File(outputFile);
       await file.writeAsBytes(bytes);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('保存成功: $outputFile')),
-        );
+        ref.read(notificationServiceProvider).showSuccess('保存成功: $outputFile');
       }
     }
   }
@@ -403,7 +433,6 @@ class _ImagePageState extends ConsumerState<ImagePage> {
                       if (isCurrent) {
                         ref.read(currentImageSessionIdProvider.notifier).setSessionId(null);
                       }
-                      Navigator.pop(context);
                     },
                   ),
                   selected: isCurrent,
@@ -434,7 +463,12 @@ class _ImagePageState extends ConsumerState<ImagePage> {
   Widget build(BuildContext context) {
     final currentSession = ref.watch(currentImageSessionProvider);
     final messages = currentSession?.messages ?? <ImageMessage>[];
-    final bool isGenerating = messages.isNotEmpty && messages.last.image.isEmpty;
+    // 排除分隔符来判断是否正在生成
+    final nonSeparatorMessages = messages.where((msg) => !msg.isSeparator).toList();
+    final bool isGenerating = nonSeparatorMessages.isNotEmpty && nonSeparatorMessages.last.image.isEmpty;
+    // 缓存模型名称列表，避免重复加载
+    final namesAsync = ref.watch(imageModelNamesProvider);
+    final currentModel = ref.watch(imageCurrentModelProvider);
 
     return Scaffold(
       key: _scaffoldKey,
@@ -516,13 +550,14 @@ class _ImagePageState extends ConsumerState<ImagePage> {
                         child: Column(
                           children: [
                             Padding(
-                              padding: const EdgeInsets.only(bottom: 4),
+                              padding: const EdgeInsets.only(bottom: 4, left: 4),
                               child: Text(
-                                timeStr,
-                                textAlign: TextAlign.center,
+                                "$currentModel • $timeStr",
                                 style: TextStyle(
                                   fontSize: 11,
                                   color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                                  fontWeight: FontWeight.w500,
+                                  height: 1.2,
                                 ),
                               ),
                             ),
@@ -575,13 +610,7 @@ class _ImagePageState extends ConsumerState<ImagePage> {
                                           ),
                                           onPressed: () {
                                             services.Clipboard.setData(services.ClipboardData(text: msg.prompt));
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              const SnackBar(
-                                                content: Text('已复制到剪贴板'),
-                                                behavior: SnackBarBehavior.floating,
-                                                width: 200,
-                                              ),
-                                            );
+                                            ref.read(notificationServiceProvider).showSuccess('已复制到剪贴板');
                                           },
                                           tooltip: '复制',
                                           style: IconButton.styleFrom(
@@ -732,54 +761,48 @@ class _ImagePageState extends ConsumerState<ImagePage> {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Consumer(
-                              builder: (context, ref, child) {
-                                final namesAsync = ref.watch(imageModelNamesProvider);
-                                final currentModel = ref.watch(imageCurrentModelProvider);
-                                return namesAsync.when(
-                                  data: (names) {
-                                    if (names.isEmpty) {
-                                      return const SizedBox(width: 32, height: 32);
-                                    }
-                                    return FPopoverMenu(
-                                      menuAnchor: Alignment.topCenter,
-                                      childAnchor: Alignment.bottomCenter,
-                                      menu: [
-                                        FItemGroup(
-                                          children: names.map((name) => FItem(
-                                            title: Text(name),
-                                            suffix: currentModel == name
-                                              ? Icon(Icons.check, size: 16, color: Theme.of(context).colorScheme.primary)
-                                              : null,
-                                            onPress: () {
-                                              ref.read(imageCurrentModelProvider.notifier).setModel(name);
-                                            },
-                                          )).toList(),
-                                        ),
-                                      ],
-                                      builder: (context, controller, child) => IconButton(
-                                        icon: const Icon(Icons.model_training, size: 14),
-                                        tooltip: '切换模型',
-                                        constraints: const BoxConstraints(maxWidth: 32, maxHeight: 32),
-                                        padding: EdgeInsets.zero,
-                                        style: IconButton.styleFrom(
-                                          shape: const CircleBorder(),
-                                          hoverColor: Theme.of(context).colorScheme.primary.withOpacity(0.08),
-                                        ),
-                                        onPressed: controller.toggle,
-                                      ),
-                                    );
-                                  },
-                                  loading: () => const SizedBox(width: 32, height: 32),
-                                  error: (err, stack) => IconButton(
-                                    icon: const Icon(Icons.error_outline, size: 14, color: Colors.red),
-                                    tooltip: '加载模型失败',
+                            namesAsync.when(
+                              data: (names) {
+                                if (names.isEmpty) {
+                                  return const SizedBox(width: 32, height: 32);
+                                }
+                                return FPopoverMenu(
+                                  menuAnchor: Alignment.topCenter,
+                                  childAnchor: Alignment.bottomCenter,
+                                  menu: [
+                                    FItemGroup(
+                                      children: names.map((name) => FItem(
+                                        title: Text(name),
+                                        suffix: currentModel == name
+                                          ? Icon(Icons.check, size: 16, color: Theme.of(context).colorScheme.primary)
+                                          : null,
+                                        onPress: () {
+                                          ref.read(imageCurrentModelProvider.notifier).setModel(name);
+                                        },
+                                      )).toList(),
+                                    ),
+                                  ],
+                                  builder: (context, controller, child) => IconButton(
+                                    icon: const Icon(Icons.model_training, size: 14),
+                                    tooltip: '切换模型',
                                     constraints: const BoxConstraints(maxWidth: 32, maxHeight: 32),
                                     padding: EdgeInsets.zero,
-                                    onPressed: null,
+                                    style: IconButton.styleFrom(
+                                      shape: const CircleBorder(),
+                                      hoverColor: Theme.of(context).colorScheme.primary.withOpacity(0.08),
+                                    ),
+                                    onPressed: controller.toggle,
                                   ),
                                 );
                               },
+                              loading: () => const SizedBox(width: 32, height: 32),
+                              error: (err, stack) => IconButton(
+                                icon: const Icon(Icons.error_outline, size: 14, color: Colors.red),
+                                tooltip: '加载模型失败',
+                                constraints: const BoxConstraints(maxWidth: 32, maxHeight: 32),
+                                padding: EdgeInsets.zero,
+                                onPressed: null,
+                              ),
                             ),
                             const SizedBox(width: 8),
                             IconButton(
@@ -810,22 +833,35 @@ class _ImagePageState extends ConsumerState<ImagePage> {
                                 hoverColor: Theme.of(context).colorScheme.primary.withOpacity(0.08),
                               ),
                               onPressed: () async {
+                                // 取消正在运行的任务
+                                if (_currentTaskId != null) {
+                                  final taskManager = ref.read(taskManagerProvider);
+                                  taskManager.cancelTask(_currentTaskId!);
+                                  _currentTaskId = null;
+                                }
+                                
                                 var localSessionId = ref.read(currentImageSessionIdProvider);
                                 if (localSessionId == null) {
                                   final newSession = await ref.read(imageSessionListProvider.notifier).createNewSession();
                                   ref.read(currentImageSessionIdProvider.notifier).setSessionId(newSession.id);
                                   localSessionId = newSession.id;
                                 }
+                                
+                                // 移除最后的 loading 消息（如果存在）
+                                final currentSession = ref.read(currentImageSessionProvider);
+                                if (currentSession != null && currentSession.messages.isNotEmpty) {
+                                  final lastMessage = currentSession.messages.last;
+                                  if (lastMessage.image.isEmpty) {
+                                    final newMessages = currentSession.messages.sublist(0, currentSession.messages.length - 1);
+                                    final updatedSession = currentSession.copyWith(messages: newMessages);
+                                    await ref.read(imageSessionListProvider.notifier).updateSession(updatedSession);
+                                  }
+                                }
+                                
                                 await ref.read(imageSessionListProvider.notifier).addSeparator(localSessionId!);
                                 _promptController.clear();
                                 if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('上下文已清除'),
-                                      behavior: SnackBarBehavior.floating,
-                                      width: 200,
-                                    ),
-                                  );
+                                  ref.read(notificationServiceProvider).showSuccess('上下文已清除');
                                 }
                               },
                             ),

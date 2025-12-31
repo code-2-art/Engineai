@@ -313,6 +313,13 @@ class GenerationTaskManager {
       );
       print('TaskManager: generateImage done, bytes: ${result.imageBytes?.length ?? 0}');
 
+      // 检查任务是否已被取消
+      final currentTask = _tasks[task.id];
+      if (currentTask == null || currentTask.status == TaskStatus.cancelled) {
+        print('TaskManager: Task ${task.id} was cancelled, ignoring result');
+        return;
+      }
+
       if (result.imageBytes != null) {
         final updatedTask = task.copyWith(
           status: TaskStatus.completed,
@@ -326,6 +333,13 @@ class GenerationTaskManager {
         throw Exception('No image bytes returned');
       }
     } catch (e) {
+      // 检查任务是否已被取消
+      final currentTask = _tasks[task.id];
+      if (currentTask == null || currentTask.status == TaskStatus.cancelled) {
+        print('TaskManager: Task ${task.id} was cancelled, ignoring error');
+        return;
+      }
+      
       print('TaskManager: Image task ${task.id} error: $e');
       final updatedTask = task.copyWith(
         status: TaskStatus.failed,

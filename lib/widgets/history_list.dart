@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import '../models/chat_session.dart';
 import '../services/chat_history_service.dart';
 import '../services/session_provider.dart';
+import '../services/notification_provider.dart';
 import '../theme/theme.dart';
 
 class HistoryList extends ConsumerStatefulWidget {
@@ -188,9 +189,7 @@ class _HistoryListState extends ConsumerState<HistoryList> {
     if (outputFile != null && context.mounted) {
       await File(outputFile).writeAsString(md);
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('导出成功，已保存到: $outputFile')),
-        );
+        ref.read(notificationServiceProvider).showSuccess('导出成功，已保存到: $outputFile');
       }
     }
   }
