@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import '../models/chat_session.dart';
@@ -25,8 +26,17 @@ class CustomImageGenerator implements ImageGenerator {
   final String apiKey;
   final String modelId;
   final double? temperature;
+  final Duration timeout;
+  final int maxRetries;
 
-  const CustomImageGenerator(this.baseUrl, this.apiKey, this.modelId, this.temperature);
+  const CustomImageGenerator(
+    this.baseUrl,
+    this.apiKey,
+    this.modelId,
+    this.temperature, {
+    this.timeout = const Duration(seconds: 60),
+    this.maxRetries = 3,
+  });
 
   String _normalizeUrl(String url) {
     var uri = url.trim();
@@ -48,6 +58,51 @@ class CustomImageGenerator implements ImageGenerator {
       throw Exception('请在设置页面配置有效的 API Key');
     }
 
+    int attempt = 0;
+    Exception? lastException;
+
+    while (attempt < maxRetries) {
+      attempt++;
+      try {
+        print('ImageGenerator: Attempt $attempt/$maxRetries');
+        final result = await _generateImageInternal(prompt, base64Images);
+        if (attempt > 1) {
+          print('ImageGenerator: Success on attempt $attempt');
+        }
+        return result;
+      } on Exception catch (e) {
+        lastException = e;
+        print('ImageGenerator: Attempt $attempt failed: $e');
+        
+        // 检查是否是可重试的错误
+        if (attempt < maxRetries && _isRetryableError(e)) {
+          // 指数退避延迟：1s, 2s, 4s...
+          final delay = Duration(milliseconds: 1000 * (1 << (attempt - 1)));
+          print('ImageGenerator: Retrying after ${delay.inSeconds}s...');
+          await Future.delayed(delay);
+        } else {
+          break;
+        }
+      }
+    }
+
+    throw lastException ?? Exception('图像生成失败：未知错误');
+  }
+
+  bool _isRetryableError(Exception e) {
+    final errorStr = e.toString().toLowerCase();
+    // 可重试的错误类型：超时、连接问题、握手问题等
+    return errorStr.contains('timeout') ||
+           errorStr.contains('connection') ||
+           errorStr.contains('handshake') ||
+           errorStr.contains('socket') ||
+           errorStr.contains('network');
+  }
+
+  Future<ImageGenerationResult> _generateImageInternal(
+    String prompt,
+    List<String>? base64Images,
+  ) async {
     final url = Uri.parse(_normalizeUrl(baseUrl));
     List<Map<String, dynamic>> contentParts = [];
     if (base64Images != null && base64Images.isNotEmpty) {
@@ -77,14 +132,29 @@ class CustomImageGenerator implements ImageGenerator {
     final bodyStr = json.encode(body);
     print('ImageGenerator: Request body length: ${bodyStr.length}');
 
-    final response = await http.post(
-      url,
-      headers: {
-        'Authorization': 'Bearer $apiKey',
-        'Content-Type': 'application/json',
-      },
-      body: json.encode(body),
-    );
+    http.Response response;
+    try {
+      response = await http.post(
+        url,
+        headers: {
+          'Authorization': 'Bearer $apiKey',
+          'Content-Type': 'application/json',
+        },
+        body: json.encode(body),
+      ).timeout(
+        timeout,
+        onTimeout: () {
+          throw Exception('请求超时 (${timeout.inSeconds}秒)');
+        },
+      );
+    } on TimeoutException catch (e) {
+      throw Exception('请求超时: ${e.message}');
+    } catch (e) {
+      if (e is Exception) {
+        rethrow;
+      }
+      throw Exception('网络请求失败: $e');
+    }
 
     print('ImageGenerator: Response status: ${response.statusCode}');
     print('ImageGenerator: Response body length: ${response.body.length}');
@@ -115,7 +185,12 @@ class CustomImageGenerator implements ImageGenerator {
                     final base64Str = imageUrl.split(',')[1];
                     imageBytes = base64Decode(base64Str);
                   } else {
-                    final imgResponse = await http.get(Uri.parse(imageUrl));
+                    final imgResponse = await http.get(Uri.parse(imageUrl)).timeout(
+                      const Duration(seconds: 30),
+                      onTimeout: () {
+                        throw Exception('下载远程图像超时');
+                      },
+                    );
                     if (imgResponse.statusCode == 200) {
                       imageBytes = imgResponse.bodyBytes;
                     } else {

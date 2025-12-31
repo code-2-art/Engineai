@@ -18,7 +18,9 @@ class ImageSessionNotifier extends StateNotifier<List<ImageSession>> {
 
   Future<void> _loadSessions() async {
     try {
-      state = await _service.getSessions();
+      final sessions = await _service.getSessions();
+      state = sessions;
+      print('ImageSessionNotifier: _loadSessions - 加载了 ${sessions.length} 个会话');
     } catch (e) {
       print('ImageSessionNotifier: Failed to load sessions: $e');
     }
@@ -36,11 +38,18 @@ class ImageSessionNotifier extends StateNotifier<List<ImageSession>> {
   }
 
   Future<void> updateSession(ImageSession updatedSession) async {
+    print('ImageSessionNotifier: updateSession - 会话ID: ${updatedSession.id}');
+    print('ImageSessionNotifier: updateSession - 消息数量: ${updatedSession.messages.length}');
+    for (int i = 0; i < updatedSession.messages.length; i++) {
+      final msg = updatedSession.messages[i];
+      print('ImageSessionNotifier: updateSession - 消息[$i] hasCached=${msg.hasCachedImageData}, cachedSize=${msg.cachedImageData?.length}');
+    }
     state = [
       for (final session in state)
         if (session.id == updatedSession.id) updatedSession else session
     ];
     await _service.saveSessions(state);
+    print('ImageSessionNotifier: updateSession - 更新完成，state消息数量: ${state.firstWhere((s) => s.id == updatedSession.id).messages.length}');
   }
 
   Future<void> updateSessionTitle(String id, String newTitle) async {
@@ -54,7 +63,11 @@ class ImageSessionNotifier extends StateNotifier<List<ImageSession>> {
   Future<void> addSeparator(String id) async {
     final index = state.indexWhere((s) => s.id == id);
     if (index != -1) {
-      final separator = ImageMessage('--- 上下文已清除 ---', Uint8List(0), null, DateTime.now(), true);
+      final separator = ImageMessage(
+        prompt: '--- 上下文已清除 ---',
+        timestamp: DateTime.now(),
+        isSeparator: true,
+      );
       final updated = state[index].copyWith(messages: [...state[index].messages, separator]);
       state = [...state.map((s) => s.id == id ? updated : s)];
       await _service.saveSessions(state);
@@ -62,13 +75,13 @@ class ImageSessionNotifier extends StateNotifier<List<ImageSession>> {
   }
 
   Future<void> deleteSession(String id) async {
+    await _service.deleteSession(id);
     state = state.where((s) => s.id != id).toList();
-    await _service.saveSessions(state);
   }
 
   Future<void> clearAll() async {
+    await _service.clearAll();
     state = [];
-    await _service.saveSessions(state);
   }
 }
 
@@ -84,7 +97,9 @@ class CurrentImageSessionNotifier extends StateNotifier<String?> {
   }
 
   void _loadCurrentSessionId() {
-    state = _prefsService.getCurrentImageSessionId();
+    final sessionId = _prefsService.getCurrentImageSessionId();
+    print('CurrentImageSessionNotifier: _loadCurrentSessionId - 加载的会话ID: $sessionId');
+    state = sessionId;
   }
 
   Future<void> setSessionId(String? sessionId) async {

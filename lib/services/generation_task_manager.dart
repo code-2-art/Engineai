@@ -9,6 +9,8 @@ import 'image_provider.dart';
 import 'session_provider.dart';
 import 'image_session_provider.dart';
 import 'shared_prefs_service.dart';
+import 'image_storage_service.dart';
+import 'image_history_service.dart';
 
 class GenerationTaskManager {
   final TaskStorageService _storage;
@@ -27,6 +29,8 @@ class GenerationTaskManager {
   static const _storageDelay = Duration(milliseconds: 500); // 存储写入防抖
 
   GenerationTaskManager(this._storage);
+  
+  final ImageStorageService _imageStorage = ImageStorageService();
 
   // 初始化：加载已保存的任务
   Future<void> init() async {
@@ -36,7 +40,7 @@ class GenerationTaskManager {
       
       // 如果有运行中的任务，恢复它们
       if (task.status == TaskStatus.running) {
-        _resumeTask(task);
+        await _resumeTask(task);
       }
     }
   }
@@ -353,11 +357,39 @@ class GenerationTaskManager {
 
   // 内部方法：恢复任务
   Future<void> _resumeTask(GenerationTask task) async {
-    // 对于 Chat 任务，需要重新启动流式生成
-    // 对于 Image 任务，需要重新启动图像生成
-    // 这里简化处理，实际可能需要保存更多中间状态
-    print('恢复任务: ${task.id}, 类型: ${task.type}');
-    // TODO: 实现任务恢复逻辑
+    print('恢复任务: ${task.id}, 类型: ${task.type}, 状态: ${task.status}');
+    
+    if (task.type == TaskType.image) {
+      // 对于 Image 任务，检查是否已经生成了图片
+      // 通过检查 session 中最后一条消息是否有图片引用来判断
+      final currentSessionId = task.sessionId;
+      if (currentSessionId != null) {
+        try {
+          // 尝试检查 session 中是否有对应的图片
+          // 由于这里没有直接访问 ImageHistoryService 的方式，
+          // 我们简化处理：重启后将 running 状态的任务标记为 failed
+          // 因为重启后无法继续生成
+          print('Image任务 ${task.id} 在重启后无法恢复，标记为失败');
+          final updatedTask = task.copyWith(
+            status: TaskStatus.failed,
+            completedAt: DateTime.now(),
+            error: '应用程序重启，图像生成任务已中断',
+          );
+          await _updateTask(updatedTask);
+        } catch (e) {
+          print('恢复 Image 任务失败: $e');
+        }
+      }
+    } else if (task.type == TaskType.chat) {
+      // 对于 Chat 任务，重启后也无法恢复流式生成
+      print('Chat任务 ${task.id} 在重启后无法恢复，标记为失败');
+      final updatedTask = task.copyWith(
+        status: TaskStatus.failed,
+        completedAt: DateTime.now(),
+        error: '应用程序重启，对话生成任务已中断',
+      );
+      await _updateTask(updatedTask);
+    }
   }
 
   // 清理资源
