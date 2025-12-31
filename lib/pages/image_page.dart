@@ -202,9 +202,24 @@ class _ImagePageState extends ConsumerState<ImagePage> {
         ? contextMessages
         : contextMessages.sublist(lastSeparatorIndex + 1);
     
-    for (final msg in messagesToUse) {
-      if (msg.image.isNotEmpty) {
+    // 检查是否有通过上传按钮上传的多张图片
+    // 上传的图片 prompt 以 "上传：" 开头
+    final uploadedImages = messagesToUse.where((msg) => msg.image.isNotEmpty && msg.prompt.startsWith('上传：')).toList();
+    final hasMultipleUploadedImages = uploadedImages.length > 1;
+    
+    if (hasMultipleUploadedImages) {
+      // 如果上传了多张图片，使用所有上传的图片
+      for (final msg in uploadedImages) {
         base64Images.add(base64Encode(msg.image));
+      }
+    } else {
+      // 否则只使用最后一张图片（无论是上传的还是生成的）
+      for (int i = messagesToUse.length - 1; i >= 0; i--) {
+        final msg = messagesToUse[i];
+        if (msg.image.isNotEmpty) {
+          base64Images.add(base64Encode(msg.image));
+          break; // 只添加最后一张
+        }
       }
     }
     
