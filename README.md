@@ -36,6 +36,10 @@
 
 
 ---
+提交：
+git push https://github.com/code-2-art/Engineai.git main
+
+---
 
  - 个人使用，除了替代大软件，还有是为了简单做图像的一些应用更方便；
  - 知识库可以连接mcp，没有必要写个连接，现在很多无代码给mcp接口的框架，很方便；
