@@ -15,21 +15,21 @@
 
 ## LLM
 
-<img src="./image/image20251223010607.png" width="350px">
+<img src="./doc/image/image20251223010607.png" width="350px">
 
 
 ## imagen models.
 
-<img src="./image/imagen20251222005636.png" width="350px">
+<img src="./doc/image/imagen20251222005636.png" width="350px">
 
 ## VL
 
-<img src="./image/20251228103524_800_213.jpg" width="350px">
+<img src="./doc/image/20251228103524_800_213.jpg" width="350px">
 
 
 ## 设置页
 
-<img src="./image/Snipaste_2025-12-28_11-02-13.png" width="350px">
+<img src="./doc/image/Snipaste_2025-12-28_11-02-13.png" width="350px">
 
 
 ---
