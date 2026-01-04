@@ -1,23 +1,29 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:forui/forui.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:file_picker/file_picker.dart';
+import 'services/system_prompt_service.dart';
+import 'services/llm_provider.dart';
+import 'services/session_provider.dart';
+import 'services/shared_prefs_service.dart';
+import 'services/chat_history_service.dart';
+import 'services/image_history_service.dart';
+import 'services/generation_task_manager.dart';
+import 'services/resource_manager.dart';
+import 'services/notification_provider.dart';
+import 'services/notification_service.dart';
 import 'pages/ai_chat.dart';
 import 'pages/settings_page.dart';
 import 'pages/image_page.dart';
-import 'services/llm_provider.dart';
-import 'services/session_provider.dart';
+import 'widgets/history_list.dart';
 import 'models/chat_session.dart';
 import 'theme/theme.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'services/shared_prefs_service.dart';
-import 'package:share_plus/share_plus.dart';
-import 'package:file_picker/file_picker.dart';
-import 'dart:io';
-import 'package:flutter/foundation.dart';
-import 'services/chat_history_service.dart';
-import 'widgets/history_list.dart';
 
 void main() async {
   print('=== MAIN START ===');
@@ -41,6 +47,32 @@ void main() async {
   unawaited(container.read(configProvider.future));
   print('=== CHAT LLM PROVIDER PREWARM START ===');
   unawaited(container.read(chatLlmProvider.future));
+  print('=== IMAGE MODEL NAMES PROVIDER PREWARM START ===');
+  unawaited(container.read(imageModelNamesProvider.future));
+  print('=== IMAGE MODEL NAMES PROVIDER PREWARM DONE ===');
+
+  print('=== SYSTEM PROMPT PREWARM START ===');
+  unawaited(container.read(systemPromptNotifierProvider.notifier).ensureInit());
+  unawaited(container.read(builtinPromptNotifierProvider.notifier).ensureInit());
+  print('=== SYSTEM PROMPT PREWARM DONE ===');
+
+  // 初始化任务管理器
+  print('=== TASK MANAGER INIT START ===');
+  final taskManager = container.read(taskManagerProvider);
+  unawaited(taskManager.init());
+  print('=== TASK MANAGER INIT DONE ===');
+
+  // 初始化资源管理器
+  final chatHistoryService = ChatHistoryService();
+  final imageHistoryService = ImageHistoryService();
+  initializeResourceManager(
+    container,
+    chatHistoryService: chatHistoryService,
+    imageHistoryService: imageHistoryService,
+  );
+
+  // 监听应用生命周期，在应用退出时清理资源
+  _setupAppLifecycleObserver(container);
 
   runApp(
     UncontrolledProviderScope(
@@ -48,6 +80,41 @@ void main() async {
       child: const Application(),
     ),
   );
+}
+
+/// 设置应用生命周期监听
+void _setupAppLifecycleObserver(ProviderContainer container) {
+  final observer = _AppLifecycleObserver(container);
+  WidgetsBinding.instance.addObserver(observer);
+}
+
+/// 应用生命周期观察器
+class _AppLifecycleObserver with WidgetsBindingObserver {
+  final ProviderContainer container;
+  bool _isExiting = false;
+
+  _AppLifecycleObserver(this.container);
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    print('=== APP LIFECYCLE: $state ===');
+    
+    if (state == AppLifecycleState.detached && !_isExiting) {
+      _isExiting = true;
+      print('=== APP LIFECYCLE: App is exiting, cleaning up resources ===');
+      _cleanupResources();
+    }
+  }
+
+  Future<void> _cleanupResources() async {
+    try {
+      final resourceManager = container.read(resourceManagerProvider);
+      await resourceManager.dispose();
+      print('=== APP LIFECYCLE: Resources cleaned up successfully ===');
+    } catch (e) {
+      print('=== APP LIFECYCLE: Error during cleanup: $e ===');
+    }
+  }
 }
 
 class Application extends ConsumerWidget {
@@ -91,6 +158,13 @@ class Application extends ConsumerWidget {
 
             return Stack(
               children: [
+                // 通知覆盖层
+                Consumer(
+                  builder: (context, ref, child) {
+                    final notificationService = ref.watch(notificationServiceProvider);
+                    return NotificationOverlay(service: notificationService);
+                  },
+                ),
                 Row(
                   children: [
                     // 左侧纯图标栏，固定宽度36，紧凑精致样式
@@ -151,6 +225,14 @@ class Application extends ConsumerWidget {
                           } else if (page == 'image') {
                             pageWidget = const ImagePage();
                           }
+                          
+                          // 监听页面变化，自动关闭侧边栏
+                          ref.listen<String>(currentPageProvider, (previous, next) {
+                            if (previous != null && previous != next) {
+                              ref.read(rightSidebarCollapsedProvider.notifier).state = true;
+                            }
+                          });
+                          
                           return GestureDetector(
                             onTap: () {
                               if (!rightCollapsed) {

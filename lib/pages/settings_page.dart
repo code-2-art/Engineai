@@ -8,10 +8,12 @@ import 'package:flutter/services.dart';
 import '../theme/theme.dart';
 import '../models/system_prompt.dart';
 import '../services/system_prompt_service.dart';
+import '../models/prompt/prompt_map.dart';
 import '../services/llm_provider.dart';
 import '../models/llm_configs.dart';
 import '../services/mcp_provider.dart';
 import '../models/mcp_config.dart';
+import '../services/notification_provider.dart';
 import 'package:mcp_client/mcp_client.dart';
 
 
@@ -339,16 +341,12 @@ class LLMSettings extends ConsumerWidget {
                     if (tempController.text.trim().isNotEmpty) {
                       temperature = double.tryParse(tempController.text.trim());
                       if (temperature == null || temperature < 0.0 || temperature > 2.0) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Temperature 必须在 0.0 到 2.0 之间')),
-                        );
+                        ref.read(notificationServiceProvider).showError('Temperature 必须在 0.0 到 2.0 之间');
                         return;
                       }
                     }
                     if (selectedTypes.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('必须选择至少一种模型类型')),
-                      );
+                      ref.read(notificationServiceProvider).showError('必须选择至少一种模型类型');
                       return;
                     }
                     if (nameController.text.isNotEmpty && modelIdController.text.isNotEmpty) {
@@ -394,16 +392,12 @@ class LLMSettings extends ConsumerWidget {
         await file.writeAsString(jsonString);
         
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('配置已保存到硬盘')),
-          );
+          ref.read(notificationServiceProvider).showSuccess('配置已保存到硬盘');
         }
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('导出失败: $e')),
-        );
+        ref.read(notificationServiceProvider).showError('导出失败: $e');
       }
     }
   }
@@ -489,16 +483,12 @@ class LLMSettings extends ConsumerWidget {
         await ref.read(configProvider.notifier).importFromJson(jsonData, merge: shouldMerge);
         
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(shouldMerge ? '配置已合并' : '配置已覆盖')),
-          );
+          ref.read(notificationServiceProvider).showSuccess(shouldMerge ? '配置已合并' : '配置已覆盖');
         }
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('导入失败: $e')),
-        );
+        ref.read(notificationServiceProvider).showError('导入失败: $e');
       }
     }
   }
@@ -787,16 +777,12 @@ class _SystemPromptSettingsState extends ConsumerState<SystemPromptSettings> {
         await file.writeAsString(markdown);
         
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('提示词已导出')),
-          );
+          ref.read(notificationServiceProvider).showSuccess('提示词已导出');
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('导出失败: $e')),
-        );
+        ref.read(notificationServiceProvider).showError('导出失败: $e');
       }
     }
   }
@@ -818,15 +804,11 @@ class _SystemPromptSettingsState extends ConsumerState<SystemPromptSettings> {
       await notifier.addPrompt(prompt);
       
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('提示词已导入')),
-        );
+        ref.read(notificationServiceProvider).showSuccess('提示词已导入');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('导入失败: $e')),
-        );
+        ref.read(notificationServiceProvider).showError('导入失败: $e');
       }
     }
   }
@@ -834,17 +816,18 @@ class _SystemPromptSettingsState extends ConsumerState<SystemPromptSettings> {
   @override
   Widget build(BuildContext context) {
     final prompts = ref.watch(customPromptsProvider);
+    final Set<String> builtinIds = getChatPromptMap().keys.toSet();
+    final builtins = ref.watch(builtinPromptsProvider);
     final theme = FTheme.of(context);
-
+  
     return Padding(
       padding: const EdgeInsets.all(20.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: ListView(
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('系统提示词', style: theme.typography.sm.copyWith(fontWeight: FontWeight.bold)),
+              Text('自定义人设', style: theme.typography.sm.copyWith(fontWeight: FontWeight.bold)),
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -873,110 +856,189 @@ class _SystemPromptSettingsState extends ConsumerState<SystemPromptSettings> {
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          Expanded(
-            child: prompts.isEmpty
-              ? const Center(child: Text('暂无自定义提示词'))
-              : ListView.builder(
-                itemCount: prompts.length,
-                itemBuilder: (context, index) {
-                  final prompt = prompts[index];
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: FCard(
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+          const SizedBox(height: 24),
+          if (prompts.isEmpty)
+            const SizedBox(
+              height: 200,
+              child: Center(child: Text('暂无自定义提示词')),
+            )
+          else
+            ...prompts.map((prompt) {
+              final bool isBuiltinPrompt = builtinIds.contains(prompt.id);
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: FCard(
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
+                            Expanded(
+                              child: Text(
+                                prompt.name,
+                                style: theme.typography.lg.copyWith(fontWeight: FontWeight.bold),
+                              ),
+                            ),
                             Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              mainAxisSize: MainAxisSize.min,
                               children: [
-                                Expanded(
-                                  child: Text(
-                                    prompt.name,
-                                    style: theme.typography.lg.copyWith(fontWeight: FontWeight.bold),
+                                Builder(
+                                  builder: (context) => Checkbox(
+                                    value: prompt.isEnabled,
+                                    onChanged: (value) async {
+                                      await ref.read(systemPromptNotifierProvider.notifier).togglePrompt(prompt.id);
+                                    },
+                                    visualDensity: VisualDensity.compact,
+                                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                    side: BorderSide(
+                                      color: Theme.of(context).colorScheme.outlineVariant,
+                                      width: 1.5,
+                                    ),
+                                    fillColor: MaterialStateProperty.resolveWith<Color?>((states) {
+                                      if (states.contains(MaterialState.selected)) {
+                                        return Theme.of(context).colorScheme.primaryContainer;
+                                      }
+                                      return Colors.transparent;
+                                    }),
+                                    checkColor: Theme.of(context).colorScheme.onPrimaryContainer,
                                   ),
                                 ),
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Checkbox(
-                                      value: prompt.isEnabled,
-                                      onChanged: (value) async {
-                                        await ref.read(systemPromptNotifierProvider.notifier).togglePrompt(prompt.id);
-                                      },
-                                      visualDensity: VisualDensity.compact,
-                                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                      side: BorderSide.none,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    FButton.icon(
-                                      onPress: () => _handleExportPrompt(prompt),
-                                      child: const Icon(Icons.download, size: 16),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    FButton.icon(
-                                      onPress: () => _showEditDialog(prompt),
-                                      child: const Icon(Icons.edit, size: 16),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    FButton.icon(
-                                      onPress: () async {
-                                        final confirm = await showDialog<bool>(
-                                          context: context,
-                                          builder: (context) => AlertDialog(
-                                            title: const Text('确认删除'),
-                                            content: Text('你确定要删除 "${prompt.name}" 吗？'),
-                                            actions: [
-                                              Row(
-                                                mainAxisAlignment: MainAxisAlignment.end,
-                                                children: [
-                                                  FButton(
-                                                    onPress: () => Navigator.pop(context, false),
-                                                    child: const Text('取消'),
-                                                  ),
-                                                  const SizedBox(width: 12),
-                                                  FButton(
-                                                    onPress: () => Navigator.pop(context, true),
-                                                    child: const Text('删除'),
-                                                  ),
-                                                ],
-                                              ),
-                                            ],
-                                          ),
-                                        );
-
-                                        if (confirm == true) {
-                                          await ref.read(systemPromptNotifierProvider.notifier).deletePrompt(prompt.id);
-                                        }
-                                      },
-                                      child: const Icon(Icons.delete, size: 16),
-                                    ),
-                                  ],
-                                ),
+                                if (!isBuiltinPrompt) ...[
+                                  const SizedBox(width: 8),
+                                  FButton.icon(
+                                    onPress: () => _handleExportPrompt(prompt),
+                                    child: const Icon(Icons.download, size: 16),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  FButton.icon(
+                                    onPress: () => _showEditDialog(prompt),
+                                    child: const Icon(Icons.edit, size: 16),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  FButton.icon(
+                                    onPress: () async {
+                                      final confirm = await showDialog<bool>(
+                                        context: context,
+                                        builder: (context) => AlertDialog(
+                                          title: const Text('确认删除'),
+                                          content: Text('你确定要删除 "${prompt.name}" 吗？'),
+                                          actions: [
+                                            Row(
+                                              mainAxisAlignment: MainAxisAlignment.end,
+                                              children: [
+                                                FButton(
+                                                  onPress: () => Navigator.pop(context, false),
+                                                  child: const Text('取消'),
+                                                ),
+                                                const SizedBox(width: 12),
+                                                FButton(
+                                                  onPress: () => Navigator.pop(context, true),
+                                                  child: const Text('删除'),
+                                                ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                      );
+  
+                                      if (confirm == true) {
+                                        await ref.read(systemPromptNotifierProvider.notifier).deletePrompt(prompt.id);
+                                      }
+                                    },
+                                    child: const Icon(Icons.delete, size: 16),
+                                  ),
+                                ],
                               ],
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              prompt.content,
-                              style: theme.typography.xs.copyWith(
-                                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ),
-                      ),
+                        const SizedBox(height: 8),
+                        Text(
+                          prompt.content,
+                          style: theme.typography.xs.copyWith(
+                            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
                     ),
-                  );
-                },
+                  ),
+                ),
+              );
+            }).toList(),
+          const SizedBox(height: 20),
+          FCard(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '内置人设',
+                    style: theme.typography.sm.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 16),
+                  if (builtins.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.all(20.0),
+                      child: Center(child: Text('暂无内置人设')),
+                    )
+                  else
+                    ListView.separated(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: builtins.length,
+                      separatorBuilder: (context, index) => const SizedBox(height: 12),
+                      itemBuilder: (context, index) {
+                        final prompt = builtins[index];
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  prompt.name,
+                                  style: theme.typography.lg.copyWith(fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                              Builder(
+                                builder: (context) => Checkbox(
+                                  value: prompt.isEnabled,
+                                  onChanged: (value) async {
+                                    await ref.read(builtinPromptNotifierProvider.notifier).toggleBuiltin(prompt.id);
+                                  },
+                                  visualDensity: VisualDensity.compact,
+                                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  side: BorderSide(
+                                    color: Theme.of(context).colorScheme.outlineVariant,
+                                    width: 1.5,
+                                  ),
+                                  fillColor: MaterialStateProperty.resolveWith<Color?>((states) {
+                                    if (states.contains(MaterialState.selected)) {
+                                      return Theme.of(context).colorScheme.primaryContainer;
+                                    }
+                                    return Colors.transparent;
+                                  }),
+                                  checkColor: Theme.of(context).colorScheme.onPrimaryContainer,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                ],
               ),
-        ),
-      ],
-    ),
-  );
+            ),
+          ),
+        ],
+      ),
+    );
 }
 }
 
@@ -1092,16 +1154,12 @@ class _MCPSettingsState extends ConsumerState<MCPSettings> {
         await file.writeAsString(jsonString);
         
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('MCP 配置已保存到硬盘')),
-          );
+          ref.read(notificationServiceProvider).showSuccess('MCP 配置已保存到硬盘');
         }
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('导出失败: $e')),
-        );
+        ref.read(notificationServiceProvider).showError('导出失败: $e');
       }
     }
   }
@@ -1187,16 +1245,12 @@ class _MCPSettingsState extends ConsumerState<MCPSettings> {
         await ref.read(mcpConfigProvider.notifier).importFromJson(jsonData, merge: shouldMerge);
         
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(shouldMerge ? 'MCP 配置已合并' : 'MCP 配置已覆盖')),
-          );
+          ref.read(notificationServiceProvider).showSuccess(shouldMerge ? 'MCP 配置已合并' : 'MCP 配置已覆盖');
         }
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('导入失败: $e')),
-        );
+        ref.read(notificationServiceProvider).showError('导入失败: $e');
       }
     }
   }

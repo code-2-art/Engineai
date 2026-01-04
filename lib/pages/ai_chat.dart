@@ -10,6 +10,7 @@ import '../models/chat_session.dart';
 import '../services/session_provider.dart';
 import 'package:markdown_widget/markdown_widget.dart';
 import 'package:share_plus/share_plus.dart';
+import '../widgets/code_block_widget.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image/image.dart' as img;
 import 'dart:io';
@@ -21,6 +22,9 @@ import 'settings_page.dart';
 import '../services/shared_prefs_service.dart';
 import '../models/system_prompt.dart';
 import '../services/system_prompt_service.dart';
+import '../services/generation_task_manager.dart';
+import '../models/generation_task.dart';
+import '../services/notification_provider.dart';
 
 final currentResponseProvider = StateProvider<String>((ref) => '');
 
@@ -37,17 +41,66 @@ class _AiChatState extends ConsumerState<AiChat> {
   bool _isSending = false;
   StreamSubscription<String>? _responseSubscription;
   List<String> _imageBase64s = [];
+  String? _currentTaskId;
 
   @override
   void initState() {
     super.initState();
     print('=== AI CHAT INITSTATE START ===');
     print('=== AI CHAT INITSTATE DONE ===');
+    // 检查是否有运行中的任务
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkRunningTask();
+    });
+  }
+
+  void _checkRunningTask() {
+    final taskManager = ref.read(taskManagerProvider);
+    final runningTask = taskManager.getRunningTask(TaskType.chat);
+    if (runningTask != null) {
+      _currentTaskId = runningTask.id;
+      setState(() {
+        _isSending = true;
+      });
+      // 监听任务状态
+      _listenToTask(runningTask.id);
+    }
+  }
+
+  void _listenToTask(String taskId) {
+    final taskManager = ref.read(taskManagerProvider);
+    taskManager.watchTask(taskId).listen((task) {
+      if (!mounted) return;
+      
+      // 更新当前响应
+      if (task.currentResponse != null) {
+        ref.read(currentResponseProvider.notifier).state = task.currentResponse!;
+        _scrollToBottom();
+      }
+      
+      // 处理任务完成
+      if (task.status == TaskStatus.completed) {
+        _addAIMessage();
+        setState(() {
+          _isSending = false;
+        });
+        _currentTaskId = null;
+      }
+      
+      // 处理任务失败
+      if (task.status == TaskStatus.failed) {
+        ref.read(notificationServiceProvider).showError('生成失败: ${task.error}');
+        setState(() {
+          _isSending = false;
+        });
+        _currentTaskId = null;
+      }
+    });
   }
 
   @override
   void dispose() {
-    _responseSubscription?.cancel();
+    // 不再取消任务，只取消页面级别的订阅
     _controller.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -69,8 +122,14 @@ class _AiChatState extends ConsumerState<AiChat> {
     final sessionId = ref.read(currentSessionIdProvider);
     if (sessionId == null) return;
     final currentModel = ref.read(chatCurrentModelProvider);
-    final aiMessage = Message(isUser: false, text: fullResponse, sender: currentModel);
     final session = ref.read(sessionListProvider).firstWhere((s) => s.id == sessionId);
+    final promptName = _getPromptName(session.systemPrompt);
+    final aiMessage = Message(
+      isUser: false,
+      text: fullResponse,
+      sender: currentModel,
+      promptName: promptName,
+    );
     await ref.read(sessionListProvider.notifier).updateSession(
       session.copyWith(messages: [...session.messages, aiMessage])
     );
@@ -80,7 +139,10 @@ class _AiChatState extends ConsumerState<AiChat> {
 
   void _stopGenerating() {
     print('AiChat: Stopping generation...');
-    _responseSubscription?.cancel();
+    if (_currentTaskId != null) {
+      final taskManager = ref.read(taskManagerProvider);
+      taskManager.cancelTask(_currentTaskId!);
+    }
     _addAIMessage();
     if (mounted) {
       setState(() {
@@ -88,13 +150,7 @@ class _AiChatState extends ConsumerState<AiChat> {
       });
     }
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('已停止生成'),
-          behavior: SnackBarBehavior.floating,
-          width: 200,
-        ),
-      );
+      ref.read(notificationServiceProvider).showInfo('已停止生成');
     }
   }
 
@@ -200,14 +256,40 @@ class _AiChatState extends ConsumerState<AiChat> {
           ? fullHistory
           : fullHistory.sublist(lastClearIndex + 1);
     
-      print('AiChat: 检查 MCP...');
-      final mcpClientFuture = ref.read(currentMcpClientProvider.future);
+      // 检查是否选择了 MCP 服务器，如果没有选择则跳过 MCP 检查
+      final currentMcp = ref.read(currentMcpProvider);
       mcp.Client? mcpClient;
-      try {
-        mcpClient = await mcpClientFuture;
-      } catch (e) {
-        print('AiChat: MCP client 加载失败: $e');
+      if (currentMcp.isNotEmpty) {
+        print('AiChat: 检查 MCP... 当前选择的 MCP: $currentMcp');
+        final mcpClientFuture = ref.read(currentMcpClientProvider.future);
+        try {
+          mcpClient = await mcpClientFuture;
+        } catch (e) {
+          print('AiChat: MCP client 加载失败: $e');
+        }
+      } else {
+        print('AiChat: 未选择 MCP 服务器，跳过 MCP 检查');
       }
+      
+      // 创建任务
+      final taskManager = ref.read(taskManagerProvider);
+      final taskId = await taskManager.createChatTask(
+        sessionId!,
+        prompt,
+        userContentParts,
+        currentSession.systemPrompt,
+        ref,
+      );
+      
+      _currentTaskId = taskId;
+      setState(() {
+        _isSending = true;
+      });
+      
+      // 监听任务状态
+      _listenToTask(taskId);
+      
+      return;
       
       if (mcpClient != null) {
         print('AiChat: MCP client capabilities: ${mcpClient.serverCapabilities}');
@@ -341,12 +423,7 @@ $decidePrompt
             
             if (!toolSuccess || toolResp.isEmpty) {
               if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: const Text('工具调用多次失败，请检查参数或网络'),
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
+                ref.read(notificationServiceProvider).showError('工具调用多次失败，请检查参数或网络');
               }
               return;
             }
@@ -370,8 +447,14 @@ $toolResp
             });
             
             final llm = await ref.read(chatLlmProvider.future);
+            final textHistory = effectiveHistory.map((msg) => Message(
+              isUser: msg.isUser,
+              text: _getDisplayText(msg),
+              sender: msg.sender,
+              timestamp: msg.timestamp,
+            )).toList();
             final stream = llm.generateStream(
-              effectiveHistory,
+              textHistory,
               analysisPrompt,
               systemPrompt: currentSession.systemPrompt ?? ''
             );
@@ -396,9 +479,7 @@ $toolResp
               onError: (e) {
                 print('AiChat: Tool analysis stream error: $e');
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('分析失败: $e')),
-                  );
+                  ref.read(notificationServiceProvider).showError('分析失败: $e');
                 }
                 _resetSendingState();
               },
@@ -463,9 +544,7 @@ $toolResp
           } catch (e) {
             print('AiChat: MCP 生成失败: $e');
             if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('MCP 生成失败，fallback 到 LLM: $e')),
-              );
+              ref.read(notificationServiceProvider).showWarning('MCP 生成失败，fallback 到 LLM: $e');
             }
           }
         } else {
@@ -473,56 +552,10 @@ $toolResp
         }
       }
     
-      // Fallback to LLM
-      print('AiChat: Fetching LLM provider...');
-      final llmFuture = ref.read(chatLlmProvider.future);
-      final llm = await llmFuture;
-      print('AiChat: LLM provider ready.');
-      
-      if (!mounted) return;
-      
-      if (!mounted) return;
-      
-      setState(() {
-        _isSending = true;
-      });
-    
-      print('AiChat: Starting stream with ${effectiveHistory.length} messages in history...');
-      final stream = llm.generateStream(effectiveHistory, prompt, userContentParts: userContentParts, systemPrompt: currentSession.systemPrompt);
-
-      _responseSubscription?.cancel();
-      _responseSubscription = stream.listen(
-        (delta) {
-          if (delta.isEmpty || !mounted) return;
-          final current = ref.read(currentResponseProvider);
-          ref.read(currentResponseProvider.notifier).state = current + delta;
-          _scrollToBottom();
-        },
-        onDone: () {
-          print('AiChat: Stream finished.');
-          _addAIMessage();
-          if (mounted) {
-            setState(() {
-              _isSending = false;
-            });
-          }
-        },
-        onError: (e) {
-          print('AiChat: Stream error: $e');
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('生成失败: $e')),
-            );
-          }
-          _resetSendingState();
-        },
-      );
     } catch (e) {
       print('AiChat: _sendMessage error: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('发送失败: $e')),
-        );
+        ref.read(notificationServiceProvider).showError('发送失败: $e');
       }
       _resetSendingState();
     }
@@ -570,6 +603,21 @@ $toolResp
       return texts.join('\n');
     }
     return message.text;
+  }
+
+  String? _getPromptName(String? systemPromptContent) {
+    if (systemPromptContent == null || systemPromptContent.isEmpty) {
+      return null;
+    }
+    final prompts = ref.read(enabledSystemPromptsProvider);
+    final prompt = prompts.firstWhere(
+      (p) => p.content == systemPromptContent,
+      orElse: () => prompts.firstWhere(
+        (p) => p.content.contains(systemPromptContent) || systemPromptContent.contains(p.content),
+        orElse: () => SystemPrompt(name: '', content: ''),
+      ),
+    );
+    return prompt.name.isNotEmpty ? prompt.name : null;
   }
 
   void _showImageViewer(Uint8List bytes) {
@@ -749,7 +797,7 @@ $toolResp
                               Padding(
                                 padding: const EdgeInsets.only(bottom: 4, left: 4, right: 4),
                                 child: Text(
-                                  "${message.sender ?? (message.isUser ? '我' : 'AI')} • $timeStr",
+                                  "${message.sender ?? (message.isUser ? '我' : 'AI')}${message.promptName != null ? ' • ${message.promptName}' : ''} • $timeStr",
                                   style: TextStyle(
                                     fontSize: 11,
                                     color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
@@ -792,7 +840,7 @@ $toolResp
                                                 : MarkdownConfig.defaultConfig;
                                             return DefaultTextStyle(
                                               style: TextStyle(color: textColor),
-                                              child: MarkdownWidget(
+                                              child: MarkdownWidgetWithCopyButton(
                                                 data: displayText,
                                                 config: config,
                                                 selectable: true,
@@ -814,9 +862,7 @@ $toolResp
                                             constraints: const BoxConstraints(),
                                             onPressed: () {
                                               Clipboard.setData(ClipboardData(text: displayText));
-                                              ScaffoldMessenger.of(context).showSnackBar(
-                                                const SnackBar(content: Text('已复制到剪贴板'), behavior: SnackBarBehavior.floating, width: 200),
-                                              );
+                                              ref.read(notificationServiceProvider).showSuccess('已复制到剪贴板');
                                             },
                                             tooltip: '复制',
                                             style: IconButton.styleFrom(
@@ -849,6 +895,7 @@ $toolResp
                         );
                       } else {
                         final currentModel = ref.watch(chatCurrentModelProvider);
+                        final promptName = _getPromptName(currentSession?.systemPrompt);
                         return Padding(
                           padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
                           child: Column(
@@ -857,7 +904,7 @@ $toolResp
                               Padding(
                                 padding: const EdgeInsets.only(bottom: 4, left: 4),
                                 child: Text(
-                                  "$currentModel • 正在输入...",
+                                  "$currentModel${promptName != null ? ' • $promptName' : ''} • 正在输入...",
                                   style: TextStyle(
                                     fontSize: 11,
                                     color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
@@ -884,15 +931,35 @@ $toolResp
                                       ),
                                     ],
                                   ),
-                                  child: SelectableText(
-                                    currentResponse.isEmpty ? 'AI 正在思考...' : currentResponse,
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      height: 1.5,
-                                      color: Theme.of(context).colorScheme.onSecondaryContainer,
-                                      fontFamilyFallback: const ['Microsoft YaHei', 'SimSun', 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans CJK SC', 'Arial Unicode MS'],
-                                    ),
-                                  ),
+                                  child: currentResponse.isEmpty
+                                    ? Text(
+                                        'AI 正在思考...',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          height: 1.5,
+                                          color: Theme.of(context).colorScheme.onSecondaryContainer,
+                                          fontFamilyFallback: const ['Microsoft YaHei', 'SimSun', 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans CJK SC', 'Arial Unicode MS'],
+                                        ),
+                                      )
+                                    : Builder(
+                                        builder: (context) {
+                                          final textColor = Theme.of(context).colorScheme.onSecondaryContainer;
+                                          final isDark = Theme.of(context).brightness == Brightness.dark;
+                                          final config = isDark
+                                              ? MarkdownConfig.darkConfig
+                                              : MarkdownConfig.defaultConfig;
+                                          return DefaultTextStyle(
+                                            style: TextStyle(color: textColor),
+                                            child: MarkdownWidgetWithCopyButton(
+                                              data: currentResponse,
+                                              config: config,
+                                              selectable: true,
+                                              shrinkWrap: true,
+                                              physics: const NeverScrollableScrollPhysics(),
+                                            ),
+                                          );
+                                        },
+                                      ),
                                   ),
                                 ),
                             ],
@@ -1063,36 +1130,6 @@ $toolResp
                               },
                             ),
                             const SizedBox(width: 8),
-                            IconButton(
-                              icon: const Icon(Icons.cleaning_services_outlined, size: 14),
-                              tooltip: '清除上下文',
-                              constraints: const BoxConstraints(
-                                maxWidth: 32,
-                                maxHeight: 32,
-                              ),
-                              padding: EdgeInsets.zero,
-                              style: IconButton.styleFrom(
-                                shape: const CircleBorder(),
-                                hoverColor: Theme.of(context).colorScheme.primary.withOpacity(0.08),
-                              ),
-                              onPressed: () async {
-                                var localSessionId = ref.read(currentSessionIdProvider);
-                                if (localSessionId == null) {
-                                  final newSession = await ref.read(sessionListProvider.notifier).createNewSession();
-                                  ref.read(currentSessionIdProvider.notifier).setSessionId(newSession.id);
-                                  localSessionId = newSession.id;
-                                }
-                                ref.read(sessionListProvider.notifier).addSeparator(localSessionId!);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('上下文已清除'),
-                                    behavior: SnackBarBehavior.floating,
-                                    width: 200,
-                                  ),
-                                );
-                              },
-                            ),
-                            const SizedBox(width: 8),
                             Consumer(
                               builder: (context, ref, child) {
                                 final namesAsync = ref.watch(chatModelNamesProvider);
@@ -1242,6 +1279,30 @@ $toolResp
                                     onPressed: null,
                                   ),
                                 );
+                              },
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton(
+                              icon: const Icon(Icons.cleaning_services_outlined, size: 14),
+                              tooltip: '清除上下文',
+                              constraints: const BoxConstraints(
+                                maxWidth: 32,
+                                maxHeight: 32,
+                              ),
+                              padding: EdgeInsets.zero,
+                              style: IconButton.styleFrom(
+                                shape: const CircleBorder(),
+                                hoverColor: Theme.of(context).colorScheme.primary.withOpacity(0.08),
+                              ),
+                              onPressed: () async {
+                                var localSessionId = ref.read(currentSessionIdProvider);
+                                if (localSessionId == null) {
+                                  final newSession = await ref.read(sessionListProvider.notifier).createNewSession();
+                                  ref.read(currentSessionIdProvider.notifier).setSessionId(newSession.id);
+                                  localSessionId = newSession.id;
+                                }
+                                ref.read(sessionListProvider.notifier).addSeparator(localSessionId!);
+                                ref.read(notificationServiceProvider).showSuccess('上下文已清除');
                               },
                             ),
                             const SizedBox(width: 8),

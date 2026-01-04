@@ -44,7 +44,7 @@ class ImageSession {
     return ImageSession(
       id: id ?? this.id,
       title: title ?? this.title,
-      messages: messages ?? this.messages,
+      messages: messages ?? List<ImageMessage>.from(this.messages),
       createdAt: createdAt ?? this.createdAt,
     );
   }

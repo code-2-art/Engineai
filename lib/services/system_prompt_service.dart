@@ -16,6 +16,12 @@ class SystemPromptNotifier extends StateNotifier<List<SystemPrompt>> {
     _box = await Hive.openBox(_boxName);
     _loadCustomPrompts();
   }
+  
+  Future<void> ensureInit() async {
+    if (_box == null) {
+      await _init();
+    }
+  }
 
   void _loadCustomPrompts() {
     if (_box == null) return;
@@ -32,13 +38,13 @@ class SystemPromptNotifier extends StateNotifier<List<SystemPrompt>> {
   }
 
   Future<void> addPrompt(SystemPrompt prompt) async {
-    if (_box == null) return;
+    await ensureInit();
     state = [...state, prompt];
     await _save();
   }
 
   Future<void> updatePrompt(SystemPrompt prompt) async {
-    if (_box == null) return;
+    await ensureInit();
     final index = state.indexWhere((p) => p.id == prompt.id);
     if (index != -1) {
       state = List<SystemPrompt>.from(state)..[index] = prompt;
@@ -47,13 +53,13 @@ class SystemPromptNotifier extends StateNotifier<List<SystemPrompt>> {
   }
 
   Future<void> deletePrompt(String id) async {
-    if (_box == null) return;
+    await ensureInit();
     state = state.where((p) => p.id != id).toList();
     await _save();
   }
 
   Future<void> togglePrompt(String id) async {
-    if (_box == null) return;
+    await ensureInit();
     final index = state.indexWhere((p) => p.id == id);
     if (index != -1) {
       final updated = state[index].copyWith(isEnabled: !state[index].isEnabled);
@@ -74,11 +80,59 @@ final systemPromptNotifierProvider = StateNotifierProvider<SystemPromptNotifier,
 final customPromptsProvider = Provider<List<SystemPrompt>>((ref) => ref.watch(systemPromptNotifierProvider));
 
 final allSystemPromptsProvider = Provider<List<SystemPrompt>>((ref) {
-  final customs = ref.watch(systemPromptNotifierProvider);
-  return [...getChatPromptMap().values.toList(), ...customs];
+  final customs = ref.watch(systemPromptNotifierProvider).where((c) => !getChatPromptMap().containsKey(c.id)).toList();
+  final builtins = ref.watch(builtinPromptsProvider);
+  return [...customs, ...builtins];
 });
 
 final enabledSystemPromptsProvider = Provider<List<SystemPrompt>>((ref) {
   final allPrompts = ref.watch(allSystemPromptsProvider);
   return allPrompts.where((p) => p.isEnabled).toList();
+});
+
+class BuiltinPromptNotifier extends StateNotifier<Map<String, bool>> {
+  static const String _builtinKey = 'builtin_enables';
+  Box<dynamic>? _box;
+
+  BuiltinPromptNotifier() : super({}) {
+    _init();
+  }
+
+  Future<void> _init() async {
+    _box = await Hive.openBox(SystemPromptNotifier._boxName);
+    _load();
+  }
+  
+  Future<void> ensureInit() async {
+    if (_box == null) {
+      await _init();
+    }
+  }
+
+  void _load() {
+    if (_box == null) return;
+    final rawStr = _box!.get(_builtinKey, defaultValue: '{}') as String;
+    final Map<String, dynamic> rawMap = json.decode(rawStr);
+    state = rawMap.map((k, v) => MapEntry(k, v as bool));
+  }
+
+  Future<void> toggleBuiltin(String id) async {
+    await ensureInit();
+    final current = state[id] ?? true;
+    state = Map<String, bool>.from(state)..[id] = !current;
+    await _save();
+  }
+
+  Future<void> _save() async {
+    if (_box == null) return;
+    await _box!.put(_builtinKey, json.encode(state));
+  }
+}
+
+final builtinPromptNotifierProvider = StateNotifierProvider<BuiltinPromptNotifier, Map<String, bool>>((ref) => BuiltinPromptNotifier());
+
+final builtinPromptsProvider = Provider<List<SystemPrompt>>((ref) {
+  final enables = ref.watch(builtinPromptNotifierProvider);
+  final map = getChatPromptMap();
+  return map.entries.map((e) => e.value.copyWith(isEnabled: enables[e.key] ?? true)).toList();
 });

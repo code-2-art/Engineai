@@ -11,11 +11,11 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # build by specifying --build-name and --build-number, respectively.
 # In Android, build-name is used as versionName while build-number used as versionCode.
 # Read more about Android versioning at https://developer.android.com/studio/publish/versioning
-# In iOS, build-name is used as CFBundleShortVersionString while build-number is used as CFBundleVersion.
+# In iOS, build-name is used as CFBundleShortVersionString while build-number used as versionCode.
 # Read more about iOS versioning at
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
-# of the product and file versions while build-number is used as the build suffix.
+# of the product and file versions while build-number used as the build suffix.
 version: 1.0.0+1
 
 environment:
@@ -25,7 +25,7 @@ environment:
 # To automatically upgrade your package dependencies to the latest versions
 # consider running `flutter pub upgrade --major-versions`. Alternatively,
 # dependencies can be manually updated by changing the version numbers below to
-# the latest version available on pub.dev. To see which versions have newer
+# the latest versions available on pub.dev. To see which versions have newer
 # versions available, run `flutter pub outdated`.
 dependencies:
   flutter:
@@ -50,8 +50,6 @@ dependencies:
   markdown_widget: ^2.3.2+8
   pro_image_editor: ^11.15.0
   mcp_client: ^1.0.2
-  sqflite: ^2.3.3
-  
   
 
 dev_dependencies:
@@ -62,7 +60,7 @@ dev_dependencies:
   # encourage good coding practices. The lint set provided by the package is
   # activated in the `analysis_options.yaml` file located at the root of your
   # package. See that file for information about deactivating specific lint
-  # rules and activating additional ones.
+  # rules and activating specific lint rules.
   flutter_lints: ^4.0.0
 
 dependency_overrides:
@@ -70,7 +68,7 @@ dependency_overrides:
   flutter_launcher_icons: ^0.14.4
 
 # For information on the generic Dart part of this file, see the
-# following page: https://dart.dev/tools/pub/pubspec
+# following page: https://dart.dev/tools/pub/pub
 
 flutter_launcher_icons:
   android: true
@@ -83,8 +81,7 @@ flutter_launcher_icons:
 flutter:
 
   # The following line ensures that the Material Icons font is
-  # included with your application, so that you can use the icons in
-  # the material Icons class.
+  # included with your application.
   uses-material-design: true
 
   assets:
@@ -104,8 +101,8 @@ flutter:
   # To add custom fonts to your application, add a fonts section here,
   # in this "flutter" section. Each entry in this list should have a
   # "family" key with the font family name, and a "fonts" key with a
-  # list giving the asset and other descriptors for the font. For
-  # example:
+  # list giving the asset and other descriptors for the font.
+  # For example:
   # fonts:
   #   - family: Schyler
   #     fonts:

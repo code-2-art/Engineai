@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import '../models/chat_session.dart';
@@ -25,8 +26,17 @@ class CustomImageGenerator implements ImageGenerator {
   final String apiKey;
   final String modelId;
   final double? temperature;
+  final Duration timeout;
+  final int maxRetries;
 
-  const CustomImageGenerator(this.baseUrl, this.apiKey, this.modelId, this.temperature);
+  const CustomImageGenerator(
+    this.baseUrl,
+    this.apiKey,
+    this.modelId,
+    this.temperature, {
+    this.timeout = const Duration(seconds: 60),
+    this.maxRetries = 3,
+  });
 
   String _normalizeUrl(String url) {
     var uri = url.trim();
@@ -48,6 +58,51 @@ class CustomImageGenerator implements ImageGenerator {
       throw Exception('请在设置页面配置有效的 API Key');
     }
 
+    int attempt = 0;
+    Exception? lastException;
+
+    while (attempt < maxRetries) {
+      attempt++;
+      try {
+        print('ImageGenerator: Attempt $attempt/$maxRetries');
+        final result = await _generateImageInternal(prompt, base64Images);
+        if (attempt > 1) {
+          print('ImageGenerator: Success on attempt $attempt');
+        }
+        return result;
+      } on Exception catch (e) {
+        lastException = e;
+        print('ImageGenerator: Attempt $attempt failed: $e');
+        
+        // 检查是否是可重试的错误
+        if (attempt < maxRetries && _isRetryableError(e)) {
+          // 指数退避延迟：1s, 2s, 4s...
+          final delay = Duration(milliseconds: 1000 * (1 << (attempt - 1)));
+          print('ImageGenerator: Retrying after ${delay.inSeconds}s...');
+          await Future.delayed(delay);
+        } else {
+          break;
+        }
+      }
+    }
+
+    throw lastException ?? Exception('图像生成失败：未知错误');
+  }
+
+  bool _isRetryableError(Exception e) {
+    final errorStr = e.toString().toLowerCase();
+    // 可重试的错误类型：超时、连接问题、握手问题等
+    return errorStr.contains('timeout') ||
+           errorStr.contains('connection') ||
+           errorStr.contains('handshake') ||
+           errorStr.contains('socket') ||
+           errorStr.contains('network');
+  }
+
+  Future<ImageGenerationResult> _generateImageInternal(
+    String prompt,
+    List<String>? base64Images,
+  ) async {
     final url = Uri.parse(_normalizeUrl(baseUrl));
     List<Map<String, dynamic>> contentParts = [];
     if (base64Images != null && base64Images.isNotEmpty) {
@@ -75,19 +130,34 @@ class CustomImageGenerator implements ImageGenerator {
     print('ImageGenerator: Request URL: $url');
     print('ImageGenerator: Request model: $modelId');
     final bodyStr = json.encode(body);
-    print('ImageGenerator: Request body preview: ${bodyStr.length < 1000 ? bodyStr : bodyStr.substring(0, 1000)}...');
+    print('ImageGenerator: Request body length: ${bodyStr.length}');
 
-    final response = await http.post(
-      url,
-      headers: {
-        'Authorization': 'Bearer $apiKey',
-        'Content-Type': 'application/json',
-      },
-      body: json.encode(body),
-    );
+    http.Response response;
+    try {
+      response = await http.post(
+        url,
+        headers: {
+          'Authorization': 'Bearer $apiKey',
+          'Content-Type': 'application/json',
+        },
+        body: json.encode(body),
+      ).timeout(
+        timeout,
+        onTimeout: () {
+          throw Exception('请求超时 (${timeout.inSeconds}秒)');
+        },
+      );
+    } on TimeoutException catch (e) {
+      throw Exception('请求超时: ${e.message}');
+    } catch (e) {
+      if (e is Exception) {
+        rethrow;
+      }
+      throw Exception('网络请求失败: $e');
+    }
 
     print('ImageGenerator: Response status: ${response.statusCode}');
-    print('ImageGenerator: Response body preview: ${response.body.length < 500 ? response.body : response.body.substring(0, 500)}...');
+    print('ImageGenerator: Response body length: ${response.body.length}');
 
     if (response.statusCode == 200) {
       final data = json.decode(response.body);
@@ -104,48 +174,82 @@ class CustomImageGenerator implements ImageGenerator {
           parts = List<dynamic>.from(contentRaw);
         }
         if (parts.isNotEmpty) {
-          final imagePart = parts.first;
-          if (imagePart['type'] == 'image_url') {
-            final imageUrlObj = imagePart['image_url'];
-            if (imageUrlObj is Map<String, dynamic> && imageUrlObj['url'] is String) {
-              final imageUrl = imageUrlObj['url'] as String;
-              if (imageUrl.startsWith('data:image')) {
-                final base64Str = imageUrl.split(',')[1];
-                imageBytes = base64Decode(base64Str);
-              } else {
-                final imgResponse = await http.get(Uri.parse(imageUrl));
-                if (imgResponse.statusCode == 200) {
-                  imageBytes = imgResponse.bodyBytes;
-                } else {
-                  description = '下载远程图像失败: ${imgResponse.statusCode}';
+          bool foundImage = false;
+          for (var part in parts) {
+            if (!foundImage && imageBytes == null) {
+              if (part['type'] == 'image_url') {
+                final imageUrlObj = part['image_url'];
+                if (imageUrlObj is Map<String, dynamic> && imageUrlObj['url'] is String) {
+                  final imageUrl = imageUrlObj['url'] as String;
+                  if (imageUrl.startsWith('data:image')) {
+                    final base64Str = imageUrl.split(',')[1];
+                    imageBytes = base64Decode(base64Str);
+                  } else {
+                    final imgResponse = await http.get(Uri.parse(imageUrl)).timeout(
+                      const Duration(seconds: 30),
+                      onTimeout: () {
+                        throw Exception('下载远程图像超时');
+                      },
+                    );
+                    if (imgResponse.statusCode == 200) {
+                      imageBytes = imgResponse.bodyBytes;
+                    } else {
+                      description = '下载远程图像失败: ${imgResponse.statusCode}';
+                    }
+                  }
+                  foundImage = true;
+                }
+              } else if (part['inlineData'] != null) {
+                final inlineData = part['inlineData'];
+                final base64Str = inlineData['data'] as String?;
+                if (base64Str != null) {
+                  imageBytes = base64Decode(base64Str);
+                  foundImage = true;
                 }
               }
             }
-          }
-          for (var part in parts.skip(1)) {
             if (part['type'] == 'text' && part['text'] is String) {
-              description += '${part['text']}\n';
+              // 过滤掉 markdown 图片语法（如 ![image]()），只保留真正的描述文本
+              final text = part['text'] as String;
+              final cleanText = text.replaceAll(RegExp(r'!\[([^\]]*)\]\(([^)]*)\)'), '');
+              if (cleanText.trim().isNotEmpty) {
+                description += '$cleanText\\n';
+              }
             }
           }
         } else if (contentRaw is String) {
-          description = contentRaw;
-          if (description.startsWith('data:image/')) {
-            final strParts = description.split(',');
-            if (strParts.length > 1) {
-              imageBytes = base64Decode(strParts[1]);
-            }
+          final dataUrlRegExp = RegExp(r'data:image/[a-zA-Z]+;base64,([A-Za-z0-9+/=]+)');
+          final match = dataUrlRegExp.firstMatch(contentRaw);
+          if (match != null) {
+            final base64Str = match.group(1)!;
+            imageBytes = base64Decode(base64Str);
+            // 过滤掉 markdown 图片语法，只保留真正的描述文本
+            description = contentRaw
+                .replaceAll(RegExp(r'data:image/[a-zA-Z]+;base64,[A-Za-z0-9+/=]+'), '')
+                .replaceAll(RegExp(r'!\[([^\]]*)\]\(([^)]*)\)'), '')
+                .trim();
+          } else if (contentRaw.trim().startsWith('iVBORw0KGgo')) {
+            imageBytes = base64Decode(contentRaw.trim());
+            description = '纯 base64 图像';
+          } else {
+            // 过滤掉 markdown 图片语法，只保留真正的描述文本
+            description = contentRaw.replaceAll(RegExp(r'!\[([^\]]*)\]\(([^)]*)\)'), '');
           }
         } else {
           description = '响应格式不支持: ${contentRaw.runtimeType}';
         }
         if (imageBytes == null) {
-          throw Exception('图像生成失败：模型未返回有效图像数据。详情 - description: "$description", content: "$contentRaw", images: "${message['images']}"');
+          print('ImageGenerator: No image found - parts length: ${parts.length}, contentRaw type: ${contentRaw.runtimeType}');
+          throw Exception('图像生成失败：模型未返回有效图像数据。详情 - description: "$description", content type: ${contentRaw.runtimeType}');
         }
+        print('ImageGenerator: Parsed image success - bytes length: ${imageBytes!.length}, description length: ${description.length}');
         return ImageGenerationResult(imageBytes: imageBytes, description: description);
+      } else {
+        throw Exception('响应中没有 choices 或 choices 为空');
       }
     }
-    print('ImageGenerator: HTTP Error ${response.statusCode}: ${response.body.length < 500 ? response.body : response.body.substring(0, 500)}...');
-    throw Exception('图像生成失败: HTTP ${response.statusCode}\n${response.body}');
+    print('ImageGenerator: HTTP Error ${response.statusCode}, body length: ${response.body.length}');
+    throw Exception('图像生成失败: HTTP ${response.statusCode}\\n${response.body}');
   }
 }
 

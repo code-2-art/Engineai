@@ -5,12 +5,32 @@ import '../models/chat_session.dart';
 class ChatHistoryService {
   static const String _boxName = 'chat_history';
   static const String _key = 'sessions';
+  
+  Box? _cachedBox;
 
   Future<Box> _getBox() async {
-    if (!Hive.isBoxOpen(_boxName)) {
-      return await Hive.openBox(_boxName);
+    if (_cachedBox != null && _cachedBox!.isOpen) {
+      return _cachedBox!;
     }
-    return Hive.box(_boxName);
+    if (!Hive.isBoxOpen(_boxName)) {
+      _cachedBox = await Hive.openBox(_boxName);
+    } else {
+      _cachedBox = Hive.box(_boxName);
+    }
+    return _cachedBox!;
+  }
+  
+  /// 清理资源，关闭 Hive box
+  Future<void> dispose() async {
+    try {
+      if (_cachedBox != null && _cachedBox!.isOpen) {
+        await _cachedBox!.close();
+        _cachedBox = null;
+        print('ChatHistoryService: Box closed');
+      }
+    } catch (e) {
+      print('ChatHistoryService: Error closing box: $e');
+    }
   }
 
   Future<List<ChatSession>> getSessions() async {
@@ -24,8 +44,7 @@ class ChatHistoryService {
             .map((item) => ChatSession.fromJson(json.decode(item as String)))
             .toList();
         sessions.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-        sessions = sessions.take(2).toList();
-        print('=== CHAT HISTORY GET SESSIONS DONE: ${sessions.length} sessions (recent 2 only) ===');
+        print('=== CHAT HISTORY GET SESSIONS DONE: ${sessions.length} sessions (all loaded) ===');
         return sessions;
       }
     } catch (e) {
@@ -108,9 +127,6 @@ class ChatHistoryService {
     final buffer = StringBuffer();
     buffer.writeln('# ${session.title}');
     buffer.writeln('Created at: ${session.createdAt}');
-    if (session.systemPrompt != null && session.systemPrompt!.isNotEmpty) {
-      buffer.writeln('System Prompt: ${session.systemPrompt}');
-    }
     buffer.writeln();
 
     for (final message in session.messages) {
@@ -122,8 +138,9 @@ class ChatHistoryService {
         continue;
       }
       final role = message.sender ?? (message.isUser ? 'User' : 'AI');
-      final timeStr = "${message.timestamp.hour.toString().padLeft(2, '0')}:${message.timestamp.minute.toString().padLeft(2, '0')}";
-      buffer.writeln('### $role ($timeStr)');
+      final timeStr = "${message.timestamp.year}-${message.timestamp.month.toString().padLeft(2, '0')}-${message.timestamp.day.toString().padLeft(2, '0')} ${message.timestamp.hour.toString().padLeft(2, '0')}:${message.timestamp.minute.toString().padLeft(2, '0')}";
+      final promptNameSuffix = message.promptName != null && !message.isUser ? ' • ${message.promptName}' : '';
+      buffer.writeln('### $role ($timeStr)$promptNameSuffix');
       buffer.writeln(message.text);
       buffer.writeln();
     }
