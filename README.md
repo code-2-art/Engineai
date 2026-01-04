@@ -13,16 +13,19 @@
 - MAC OS 版本只有 M2 环境，仅支持 ARM 架构，早期 Intel 不支持。
 
 
-## LLM
+## LLM-VL
 
 <img src="./doc/image/image20251223010607.png" width="350px">
 
 
-## imagen models.
+## 图像生成 models.
 
 <img src="./doc/image/imagen20251222005636.png" width="350px">
 
-## VL
+- openrouter和dmxapi接口；
+- openaiapi兼容；
+
+## 提示词管理
 
 <img src="./doc/image/20251228103524_800_213.jpg" width="350px">
 
@@ -37,5 +40,4 @@
  - 个人使用，除了替代大软件，还有是为了简单做图像的一些应用更方便；
  - 知识库可以连接mcp，没有必要写个连接，现在很多无代码给mcp接口的框架，很方便；
  - 有什么bug请提交到问题中，会尽快解决；
- - 基于flutter代码没有开源是因为版本库有apikey，得专门找时间清理，抱歉；
 
