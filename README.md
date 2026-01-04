@@ -1,8 +1,17 @@
-# Engineai_Release
+# Engineai
 
-一个LLM、VL和image生成的极简聊天软件，自己用来替代复杂无用的chat软件。
 
-目前功能：
+Engineai 是一个基于 Flutter 的跨平台 AI 聊天应用，支持文本对话、图像识别和图像生成功能。
+
+目前我自己用来替代复杂的chat软件。
+
+## 技术栈：
+  - Flutter 3.5.4+ / Dart
+  - Riverpod 状态管理
+  - Hive 本地数据库
+  - OpenAI 兼容 API
+
+## 目前功能：
 
 - openai api 兼容接口模型，对话聊天；
 - vl 模型多图识别；
@@ -13,12 +22,12 @@
 - MAC OS 版本只有 M2 环境，仅支持 ARM 架构，早期 Intel 不支持。
 
 
-## LLM-VL
+### LLM-VL
 
 <img src="./doc/image/image20251223010607.png" width="350px">
 
 
-## 图像生成 models.
+### 图像生成 models.
 
 <img src="./doc/image/imagen20251222005636.png" width="350px">
 
@@ -29,18 +38,18 @@
 <img src="./doc/image/20251228103524_800_213.jpg" width="350px">
 
 
-## 设置页
+### 设置页
 
 <img src="./doc/image/Snipaste_2025-12-28_11-02-13.png" width="350px">
 
 ---
 
-## 提示词管理
+### 提示词管理
 
  ```bash
 flutter pub get
  ```
-## Web Persistence
+#### Web Persistence
 
 When running `flutter run -d chrome`, a temporary Chrome profile is created, meaning local data (Hive, SharedPreferences) is lost between restarts.
 
@@ -54,7 +63,7 @@ To persist data during development:
 
 Data will now persist in your browser's local storage.
 
-## macos
+##### macos
    ```bash
    flutter run -d macos
    flutter run -d macos --release
