@@ -1,0 +1,11 @@
+{
+  "version": "0.3.4",
+  "notes": "更新说明",
+  "pub_date": "2026-03-04T00:00:00Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHJzaWduIGVuY3J5cHRlZCBzZWNyZXQga2V5ClJXUlRZMEl5TGdFcHNGdStyUUJnR3FXMGpHYVNiL0dmRi9UMm1tVk1aUXdLdDhhM3U0b0FBQkFBQUFBQUFBQUFBQUlBQUFBQXZ4WWNxcG44K2tMREdVYWgxc25Zd2QxSytjWlJvY2l6M3U2Lzc4c2E4VHpVNTRQdE44VjBuSWlQQW5aMVhLZ2E0bjdZNnkrM0ljUU9mcXpVQWtXcDdHamQxZ3Ard3RZWHJHbHJXMDVMQTE4ZlpYUzNQVUNUK3AyaTRtVEt2cTlCOVp3TTBTNkN6M009Cg==",
+      "url": "https://github.com/code-2-art/Engineai/releases/download/v0.3.4/anime-next_0.3.4_x64-setup.exe"
+    }
+  }
+}
